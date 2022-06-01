@@ -1,2 +1,2 @@
 # archethic-telegram-bot
-Telegram bot developed in javascript with Telegraf and archethic js library.
+Archethic Telegram bot developed in javascript with Telegraf and archethic Javascript library.
