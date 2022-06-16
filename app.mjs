@@ -1,33 +1,25 @@
-/*const archethic = require('archethic')
-const fetch = require('cross-fetch')
-const { Telegraf, Markup } = require('telegraf');
-const { BIP39 } = require('bip39');
-const { randomSecretKey } = require('archethic');
-const {  randomBytes } = require('crypto');
-*/
-
 import archethic from "archethic";
 import fetch from "cross-fetch";
 import { Telegraf, Markup } from "telegraf";
-//import { Telegraf, Markup , reply_markup } from "telegraf";
-import bip39 from "bip39";
 const randomSecretKey = archethic.randomSecretKey;
-import { randomBytes} from "crypto";
+
 
 // custom modules
 import  db from "./lib/src/services/database.mjs"
 import {UsersDao} from "./lib/src/services/users_dao.mjs"
-import crypto from "archethic/lib/crypto.js";
 
-// telegram global variable
+// telegraf bot instance
 const bot = new Telegraf(process.env.BOT_TOKEN)
-// Archethic global variable
+
+// Archethic global variables
 const archethicEndpoint = "https://testnet.archethic.net";
 const testnetOriginKey = "000118be6f071dafc864008de5e52fb83714c976fcdc4d0aa17205fe54e65c6bc904"
+const curveType = "ed25519";
 
+// functionnals global variables
 const wallet_button_text = "Wallet";
 const Generate_wallet_button_text = "Generate Wallet";
-const curveType = "ed25519";
+
 
 
 
