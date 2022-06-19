@@ -8,8 +8,13 @@ const randomSecretKey = archethic.randomSecretKey;
 import  db from "./lib/src/services/database.mjs"
 import {UsersDao} from "./lib/src/services/users_dao.mjs"
 
+// logger
+import log from "./lib/src/services/logger.mjs"
+import logger from "./lib/src/services/logger.mjs";
+
 // telegraf bot instance
 const bot = new Telegraf(process.env.BOT_TOKEN)
+
 
 // Archethic global variables
 const archethicEndpoint = "https://testnet.archethic.net";
@@ -22,23 +27,6 @@ const Generate_wallet_button_text = "Generate Wallet";
 
 
 
-
-
-var chatMap = new Map();
-
-function generateSeed(){
-
-  const randomString = randomSecretKey();
-
-  return randomString;
-}
-
-function generateAddress(seed, index) {
- 
-  var address = archethic.deriveAddress(seed,index)
-  return address;
-}
-
 function generatePemText(seed,publicAddress){
   const { privateKey }  = archethic.deriveKeyPair(seed,0);
   var pemText = "-----BEGIN PRIVATE KEY for " + publicAddress + "-----" + "\n";
@@ -49,13 +37,6 @@ function generatePemText(seed,publicAddress){
   
   
   
-}
-
-
-// users methods 
-
-function hasUser(users, id ){
-  return users.some(user => user.id === id )
 }
 
 
@@ -95,6 +76,10 @@ function getUCOBalance(publicAddress){
 bot.command('quit', (ctx) => {
   // Explicit usage
   ctx.telegram.leaveChat(ctx.message.chat.id)
+  .catch(error => logger.error(error))
+    
+  
+
 
   // Using context shortcut
   // ctx.leaveChat()
@@ -103,7 +88,7 @@ bot.command('quit', (ctx) => {
 bot.command('start', ctx => {
   var userId = ctx.message.from.id
   db.read()
-  if (!hasUser(db.data.users,userId)){
+  if (!db.data.users.some(user => user.id === id )){
     db.data.users.push({ id : userId})
     db.write()
   }else{
@@ -111,47 +96,42 @@ bot.command('start', ctx => {
   }
   
   ctx.telegram.sendMessage(ctx.message.chat.id, "Home",  Markup.keyboard([["Wallet"],["Help","About"]])
-  /*{
-    reply_markup: {
-      keyboard: [
-        [
-          { text: "WALLET" }
-        ]
-      ]
-    }
-  }
-  */)
+  .catch(error => logger.error(error))
+)
 })
 
 bot.hears("Wallet", ctx =>{
   var userId = ctx.message.from.id
   var user = UsersDao.getById(userId)
-  //if(!chatMap.has(ctx.message.chat.id)){
 
-  if (user !== undefined ){
-
-  
-    if(!user.hasOwnProperty('wallet')){
-
-      ctx.telegram.sendMessage(ctx.message.chat.id, "Wallet",
-      Markup.keyboard([[Generate_wallet_button_text],["Back"]]))
-  
-    }
-    else{
-
-      getUCOBalance(user.wallet)
-      .then((amount)=>{
-        return ctx.telegram.sendMessage(ctx.message.chat.id, "Wallet generated.",
-        Markup.keyboard([["Wallet : " + user.wallet],
-        ["💰 Balance : " + amount],["Back"]]))
-        
-        })
-
-      
-
-
-    }
+  if (user === undefined) {
+    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: You are not registered with me. 🛑`)
+      .catch(error => logger.error(error))
   }
+
+  if (!user.hasOwnProperty('wallet')) {
+
+    return ctx.telegram.sendMessage(ctx.message.chat.id, "Wallet",
+      Markup.keyboard([[Generate_wallet_button_text], ["Back"]]))
+      .catch(error => logger.error(error))
+
+  }
+
+
+  getUCOBalance(user.wallet)
+    .then((amount) => {
+      return ctx.telegram.sendMessage(ctx.message.chat.id, "Wallet generated.",
+        Markup.keyboard([["Wallet : " + user.wallet],
+        ["💰 Balance : " + amount], ["Back"]]))
+
+    })
+    .catch(error => logger.error(error))
+
+
+
+
+
+  
 
 }
 
@@ -161,10 +141,10 @@ bot.hears(Generate_wallet_button_text, ctx =>{
 
   var userId = ctx.message.from.id
   var chatId = ctx.message.chat.id;
-  var seed = generateSeed();
+  var seed = randomSecretKey();
   var index = 0;
 
-  var publicAddress = generateAddress(seed,index);
+  var publicAddress = archethic.deriveAddress(seed,index)
   
   var chatAddressData = {
     seed : seed,
@@ -175,36 +155,35 @@ bot.hears(Generate_wallet_button_text, ctx =>{
   user.seed = seed;
   db.write()
   var pemTextBuffer = generatePemText(seed,publicAddress);
-  chatMap.set(ctx.message.chat.id, chatAddressData);
+
 
   
   ctx.replyWithDocument({source: pemTextBuffer , filename: publicAddress + ".pem" })
-  
+  .catch(error => logger.error(error))
 
   ctx.telegram.sendMessage(ctx.message.chat.id, "Wallet generated : ")
-  ctx.telegram.sendMessage(ctx.message.chat.id, chatMap.get(chatId).publicAddress,
-    Markup.keyboard([["Wallet : " + chatMap.get(chatId).publicAddress.toString()],["Back"]]))
-
+  .catch(error => logger.error(error))
+  ctx.telegram.sendMessage(ctx.message.chat.id, publicAddress,
+    Markup.keyboard([["Wallet : " + publicAddress.toString()],["Back"]]))
+    .catch(error => logger.error(error))
 })
 
 bot.hears("Back", ctx => {
   ctx.telegram.sendMessage(ctx.message.chat.id, "Home",  Markup.keyboard([["Wallet"],["Help","About"]]))
-  
+  .catch(error => logger.error(error))
 })
 
 bot.hears("Help", ctx => {
   ctx.telegram.sendMessage(ctx.message.chat.id, "I'm here to help you set your archethic wallet.")
-  
+  .catch(error => logger.error(error))
 })
 
 bot.hears("About", ctx => {
   ctx.telegram.sendMessage(ctx.message.chat.id, "Telegram bot done with Telegraf and Archethic javascript libraries.")
-  
+  .catch(error => logger.error(error))
 })
 
-async function getIndex (address){
-  await archethic.getTransactionIndex(address,archethicEndpoint)
-}
+
 
 // tip listener
 const regex = /^!tip \d+,*\d{0,16}/;
@@ -215,24 +194,30 @@ bot.hears(regex, ctx => {
 
 
   if(user === undefined ){
-    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: You are not registered with me. 🛑`);
+    
+    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: You are not registered with me. 🛑`)
+    .catch(error => logger.error(error));
   }
 
   if (ctx.message.reply_to_message?.from?.id === undefined) {
-    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Tip by replying to another user. 🛑`);
+    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Tip by replying to another user. 🛑`)
+    .catch(error => logger.error(error));
   }
 
   var recipientID = ctx.message.reply_to_message.from.id
   var recipientUser = UsersDao.getById(recipientID)
 
   if (recipientUser === undefined) {
-    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖:@${ctx.message.reply_to_message.from.username} not registered with me ! 🛑`);
+    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖:@${ctx.message.reply_to_message.from.username} not registered with me ! 🛑`)
+    .catch(error => logger.error(error));
   }
 
   if(recipientID === user.id){
-    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: I will not work for nothing ! You are tipping yourself... 🛑`);
+    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: I will not work for nothing ! You are tipping yourself... 🛑`)
+    .catch(error => logger.error(error));
   }
 
+  
 
   var recipientUser = UsersDao.getById(recipientID)
 
@@ -247,13 +232,14 @@ bot.hears(regex, ctx => {
 
       try {
 
-        archethic.sendTransaction(tx, archethicEndpoint)
+        archethic.sendTransaction(tx, archethicEndpoint).catch(error => logger.error(error))
 
-        ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: You tipped ${tipValue[0]}! 💸`);
+        ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: You tipped ${tipValue[0]}! 💸`)
+        .catch(error => logger.error(error));
 
 
-      } catch (e) {
-        console.log(e.toString())
+      } catch (error) {
+        logger.error(error)
       }
     }
 

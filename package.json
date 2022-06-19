@@ -12,6 +12,7 @@
     "archethic": "^1.7.0",
     "bip39": "^3.0.4",
     "lowdb": "^3.0.0",
-    "telegraf": "^4.7.0"
+    "telegraf": "^4.7.0",
+    "winston": "^3.7.2"
   }
 }

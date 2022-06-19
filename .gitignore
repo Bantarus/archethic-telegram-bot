@@ -1,3 +1,4 @@
 **/node_modules/*
 .vscode/launch.json
 db.json
+**/log
