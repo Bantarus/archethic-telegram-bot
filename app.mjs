@@ -88,7 +88,7 @@ bot.command('quit', (ctx) => {
 bot.command('start', ctx => {
   var userId = ctx.message.from.id
   db.read()
-  if (!db.data.users.some(user => user.id === id )){
+  if (!db.data.users.some(user => user.id === userId )){
     db.data.users.push({ id : userId})
     db.write()
   }else{
@@ -96,8 +96,7 @@ bot.command('start', ctx => {
   }
   
   ctx.telegram.sendMessage(ctx.message.chat.id, "Home",  Markup.keyboard([["Wallet"],["Help","About"]])
-  .catch(error => logger.error(error))
-)
+  ).catch(error => logger.error(error))
 })
 
 bot.hears("Wallet", ctx =>{
@@ -127,15 +126,7 @@ bot.hears("Wallet", ctx =>{
     })
     .catch(error => logger.error(error))
 
-
-
-
-
-  
-
-}
-
-)
+})
 
 bot.hears(Generate_wallet_button_text, ctx =>{
 
@@ -146,16 +137,12 @@ bot.hears(Generate_wallet_button_text, ctx =>{
 
   var publicAddress = archethic.deriveAddress(seed,index)
   
-  var chatAddressData = {
-    seed : seed,
-    publicAddress : publicAddress
-  }
+
   var user = UsersDao.getById(userId);
   user.wallet = publicAddress;
-  user.seed = seed;
+  user.seed = seed.toString();
   db.write()
   var pemTextBuffer = generatePemText(seed,publicAddress);
-
 
   
   ctx.replyWithDocument({source: pemTextBuffer , filename: publicAddress + ".pem" })
@@ -232,7 +219,8 @@ bot.hears(regex, ctx => {
 
       try {
 
-        archethic.sendTransaction(tx, archethicEndpoint).catch(error => logger.error(error))
+        archethic.sendTransaction(tx, archethicEndpoint)
+        .catch(error => logger.error(error))
 
         ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: You tipped ${tipValue[0]}! 💸`)
         .catch(error => logger.error(error));
