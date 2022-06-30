@@ -73,6 +73,8 @@ function getUCOBalance(publicAddress){
   
 }
 
+
+
 bot.command('quit', (ctx) => {
   // Explicit usage
   ctx.telegram.leaveChat(ctx.message.chat.id)
@@ -116,17 +118,54 @@ bot.hears("Wallet", ctx =>{
 
   }
 
+   var walletTextToDraw = user.wallet.substring(0,4) + "..." + user.wallet.substring(user.wallet.length-4,user.wallet.length)
 
-  getUCOBalance(user.wallet)
-    .then((amount) => {
-      return ctx.telegram.sendMessage(ctx.message.chat.id, "Wallet generated.",
-        Markup.keyboard([["Wallet : " + user.wallet],
-        ["💰 Balance : " + amount], ["Back"]]))
 
-    })
+  var keyboardObject = [
+    ["👛 Wallet : " + walletTextToDraw],
+    ["▶️ Manage"],
+    ["🏠 Back"]
+  ]
+  
+  return ctx.telegram.sendMessage(ctx.message.chat.id, "Wallet generated.",
+    Markup.keyboard(keyboardObject))
     .catch(error => logger.error(error))
 
+
 })
+
+
+bot.hears("▶️ Manage", async ctx => {
+
+  var textReply = "💰 Wallet balance : ";
+  try{
+    var balance =  await getUCOBalance(user.wallet)
+    textReply+= balance + " UCO\n"
+
+  }catch(error){
+    textReply+= "Unavailable"
+    logger.error(error);
+  }
+ 
+  
+
+  var inlineKeyboardReply = [
+    [{ text : "💸 Send", callback_data : "some data"},{ text : "📨 Receive" , callback_data : "some data"}],
+    [{ text : "🔧 Backup seed", callback_data : "some data"}]
+    
+  ]
+
+  try {
+    return await ctx.telegram.sendMessage(ctx.message.chat.id, textReply,
+      Markup.inlineKeyboard(inlineKeyboardReply));
+  } catch (error) {
+    logger.error(error);
+    return await ctx.telegram.sendMessage(ctx.message.chat.id, "Management keyboard not accessible.");
+
+  }
+})
+
+
 
 bot.hears(Generate_wallet_button_text, ctx =>{
 
@@ -155,7 +194,7 @@ bot.hears(Generate_wallet_button_text, ctx =>{
     .catch(error => logger.error(error))
 })
 
-bot.hears("Back", ctx => {
+bot.hears("🏠 Back", ctx => {
   ctx.telegram.sendMessage(ctx.message.chat.id, "Home",  Markup.keyboard([["Wallet"],["Help","About"]]))
   .catch(error => logger.error(error))
 })
@@ -174,20 +213,27 @@ bot.hears("About", ctx => {
 
 // tip listener
 const regex = /^!tip \d+,*\d{0,16}/;
-bot.hears(regex, ctx => {
+bot.hears(regex, async ctx => {
   var rgx = /\d+,*\d{0,16}/;
   var tipValue = rgx.exec(ctx.message.text);
   var user = UsersDao.getById(ctx.message.from.id)
+  var userBalance = await getUCOBalance(user.wallet).catch(error => {return 0})
+
 
 
   if(user === undefined ){
     
-    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: You are not registered with me. 🛑`)
+    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Unknown life form : @${ctx.message.from.username}. 🛑`)
     .catch(error => logger.error(error));
   }
 
   if (ctx.message.reply_to_message?.from?.id === undefined) {
-    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Tip by replying to another user. 🛑`)
+    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Hey @${ctx.message.from.username}, you can tip by replying to another user. 🛑`)
+    .catch(error => logger.error(error));
+  }
+
+  if (tipValue > userBalance){
+    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Hey @${ctx.message.from.username}, waiting for payday ? Insufficients funds. 🛑`)
     .catch(error => logger.error(error));
   }
 
@@ -195,12 +241,12 @@ bot.hears(regex, ctx => {
   var recipientUser = UsersDao.getById(recipientID)
 
   if (recipientUser === undefined) {
-    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖:@${ctx.message.reply_to_message.from.username} not registered with me ! 🛑`)
+    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖:@${ctx.message.reply_to_message.from.username} is not registered with me ! 🛑`)
     .catch(error => logger.error(error));
   }
 
   if(recipientID === user.id){
-    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: I will not work for nothing ! You are tipping yourself... 🛑`)
+    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: I will not work for nothing ! @${ctx.message.from.username} is tipping himself... 🛑`)
     .catch(error => logger.error(error));
   }
 
@@ -222,7 +268,7 @@ bot.hears(regex, ctx => {
         archethic.sendTransaction(tx, archethicEndpoint)
         .catch(error => logger.error(error))
 
-        ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: You tipped ${tipValue[0]}! 💸`)
+        ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: @${ctx.message.from.username} sent ${tipValue[0]} to @${ctx.message.reply_to_message.from.username} ! 💸`)
         .catch(error => logger.error(error));
 
 
