@@ -9,10 +9,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "archethic": "^1.7.0",
+    "archethic": "^1.9.1",
     "bip39": "^3.0.4",
     "lowdb": "^3.0.0",
-    "telegraf": "^4.7.0",
+    "telegraf": "^4.8.5",
+    "telegraf-session-local": "^2.1.0",
     "winston": "^3.7.2"
   }
 }

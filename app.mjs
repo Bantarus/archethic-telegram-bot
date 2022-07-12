@@ -1,7 +1,11 @@
 import archethic from "archethic";
 import fetch from "cross-fetch";
-import { Telegraf, Markup } from "telegraf";
+import { Telegraf, Markup, Scenes} from "telegraf";
+import LocalSession from 'telegraf-session-local'
+
 const randomSecretKey = archethic.randomSecretKey;
+
+
 
 
 // custom modules
@@ -11,20 +15,29 @@ import {UsersDao} from "./lib/src/services/users_dao.mjs"
 // logger
 import log from "./lib/src/services/logger.mjs"
 import logger from "./lib/src/services/logger.mjs";
+//import { Stage, WizardScene } from "telegraf/typings/scenes/index.js";
 
 // telegraf bot instance
-const bot = new Telegraf(process.env.BOT_TOKEN)
+const token = process.env.BOT_TOKEN
+if (token === undefined) {
+  throw new Error('BOT_TOKEN must be provided!')
+}
+
+const bot = new Telegraf(token)
 
 
 // Archethic global variables
 const archethicEndpoint = "https://testnet.archethic.net";
-const testnetOriginKey = "000118be6f071dafc864008de5e52fb83714c976fcdc4d0aa17205fe54e65c6bc904"
+const testnetOriginKey = "01019280BDB84B8F8AEDBA205FE3552689964A5626EE2C60AA10E3BF22A91A036009"
 const curveType = "ed25519";
 
 // functionnals global variables
 const wallet_button_text = "Wallet";
 const Generate_wallet_button_text = "Generate Wallet";
-
+const callback_data_send = "send"
+const callback_data_receive = "receive"
+const callback_data_backup_seed = "seed"
+const SEND_WIZARD_SCENE_ID = "SEND_WIZARD"
 
 
 function generatePemText(seed,publicAddress){
@@ -39,6 +52,13 @@ function generatePemText(seed,publicAddress){
   
 }
 
+
+function seedStringToUint8Array(seed){
+
+  var seedUint8Array = new Uint8Array(seed.split(",").map( i => parseInt(i)));
+
+  return seedUint8Array;
+}
 
 
 function getUCOBalance(publicAddress){
@@ -135,11 +155,62 @@ bot.hears("Wallet", ctx =>{
 })
 
 
-bot.hears("▶️ Manage", async ctx => {
+bot.hears(Generate_wallet_button_text, ctx =>{
 
+  var userId = ctx.message.from.id
+  var chatId = ctx.message.chat.id;
+  var seed = randomSecretKey();
+  var index = 0;
+
+  var publicAddress = archethic.deriveAddress(seed,index)
+  
+
+
+  var user = UsersDao.getById(userId);
+  if(user === undefined ){
+    
+    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Unknown life form : @${ctx.message.from.username}. 🛑`)
+    .catch(error => logger.error(error));
+  }
+
+  user.wallet = publicAddress;
+  user.seed = seed.toString()
+  db.write()
+  
+  //var pemTextBuffer = generatePemText(seed,publicAddress);
+
+  
+  //ctx.replyWithDocument({source: pemTextBuffer , filename: publicAddress + ".pem" })
+  //.catch(error => logger.error(error))
+
+  var walletTextToDraw = user.wallet.substring(0,4) + "..." + user.wallet.substring(user.wallet.length-4,user.wallet.length)
+
+
+  var keyboardObject = [
+    ["👛 Wallet : " + walletTextToDraw],
+    ["▶️ Manage"],
+    ["🏠 Back"]
+  ]
+
+  ctx.telegram.sendMessage(ctx.message.chat.id, "Wallet generated :")
+    .catch(error => logger.error(error))
+
+  ctx.telegram.sendMessage(ctx.message.chat.id, publicAddress,
+    Markup.keyboard(keyboardObject))
+    .catch(error => logger.error(error))
+})
+
+
+bot.hears("▶️ Manage", async ctx => {
+  var userId = ctx.message.from.id
+  var user = UsersDao.getById(userId)
+  var seedUint8Array = seedStringToUint8Array(user.seed)
+  
   var textReply = "💰 Wallet balance : ";
   try{
-    var balance =  await getUCOBalance(user.wallet)
+    var index = await archethic.getTransactionIndex(user.wallet, archethicEndpoint)
+    var lastAddress = archethic.deriveAddress(seedUint8Array,index)
+    var balance =  await getUCOBalance(lastAddress)
     textReply+= balance + " UCO\n"
 
   }catch(error){
@@ -150,8 +221,8 @@ bot.hears("▶️ Manage", async ctx => {
   
 
   var inlineKeyboardReply = [
-    [{ text : "💸 Send", callback_data : "some data"},{ text : "📨 Receive" , callback_data : "some data"}],
-    [{ text : "🔧 Backup seed", callback_data : "some data"}]
+    [{ text : "💸 Send", callback_data : callback_data_send},{ text : "📨 Receive" , callback_data : "some data"}],
+    [{ text : "🔑 Backup seed", callback_data : "some data"}]
     
   ]
 
@@ -166,33 +237,6 @@ bot.hears("▶️ Manage", async ctx => {
 })
 
 
-
-bot.hears(Generate_wallet_button_text, ctx =>{
-
-  var userId = ctx.message.from.id
-  var chatId = ctx.message.chat.id;
-  var seed = randomSecretKey();
-  var index = 0;
-
-  var publicAddress = archethic.deriveAddress(seed,index)
-  
-
-  var user = UsersDao.getById(userId);
-  user.wallet = publicAddress;
-  user.seed = seed.toString();
-  db.write()
-  var pemTextBuffer = generatePemText(seed,publicAddress);
-
-  
-  ctx.replyWithDocument({source: pemTextBuffer , filename: publicAddress + ".pem" })
-  .catch(error => logger.error(error))
-
-  ctx.telegram.sendMessage(ctx.message.chat.id, "Wallet generated : ")
-  .catch(error => logger.error(error))
-  ctx.telegram.sendMessage(ctx.message.chat.id, publicAddress,
-    Markup.keyboard([["Wallet : " + publicAddress.toString()],["Back"]]))
-    .catch(error => logger.error(error))
-})
 
 bot.hears("🏠 Back", ctx => {
   ctx.telegram.sendMessage(ctx.message.chat.id, "Home",  Markup.keyboard([["Wallet"],["Help","About"]]))
@@ -211,15 +255,124 @@ bot.hears("About", ctx => {
 
 
 
+
+// send action scene
+const sendWizard = new Scenes.WizardScene(SEND_WIZARD_SCENE_ID,
+  (ctx) => {
+    ctx.reply("Which is the recipient public address ?")
+
+    ctx.wizard.state.sendData = {}
+
+    return ctx.wizard.next();
+
+  },
+  (ctx) => {
+
+    ctx.wizard.state.sendData.to = ctx.message.text
+
+
+     
+    ctx.reply("UCO amount to send ?")
+    
+    return ctx.wizard.next();
+
+
+  },
+  (ctx) => {
+    
+    if(isNaN(Number(ctx.message.text))){
+      return ctx.reply("Invalid amount !")
+    }
+
+    ctx.wizard.state.sendData.amount = ctx.message.text
+    let textReply = "Send to : " + ctx.wizard.state.sendData.to + "\n"
+        textReply += "Amount : " + ctx.wizard.state.sendData.amount + " UCO" + "\n"
+        textReply += "Do you confirm ? NO|YES"
+    ctx.reply(textReply)
+    return ctx.wizard.next();
+  },
+  async (ctx) => {
+
+    // if YES
+    // sign transfert on chain 
+    //if(ctx.message.text === "YES"){
+      try {
+      var user = UsersDao.getById(ctx.message.from.id);
+      var seedUint8Array = seedStringToUint8Array(user.seed)
+      
+
+      var originKey = archethic.getOriginKey()
+
+      archethic.getTransactionIndex(user.wallet, archethicEndpoint)
+        .then((index) => {
+          var tx = archethic.newTransactionBuilder("transfer")
+            .addUCOTransfer(ctx.wizard.state.sendData.to, parseFloat(ctx.wizard.state.sendData.amount))
+            .build(seedUint8Array, index)
+            .originSign(originKey)
+    
+          console.log(tx.toJSON())
+    
+         
+    
+            archethic.sendTransaction(tx, archethicEndpoint)
+            .then( r => {
+              console.log(r)
+              ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: UCO sent ! 💸`)
+              .catch(error => logger.error(error));
+            }
+            
+
+            )
+            .catch(error => error => logger.error(error))
+    
+            
+    
+    
+          
+        }
+    
+        ).catch(error => error => logger.error(error))
+    
+      
+
+    } catch (error) {
+      logger.error(error)
+    }
+    //}
+    
+    
+    return ctx.scene.leave();
+  })
+
+// add send wizard scene to a middleware
+const stage = new Scenes.Stage([sendWizard]);
+// register before using enter 
+
+bot.use(new LocalSession({}).middleware())
+bot.use(stage.middleware()) 
+
+// send inline button action to enter scene
+
+bot.action(callback_data_send, Scenes.Stage.enter(SEND_WIZARD_SCENE_ID) ) // ctx => ctx.scene.enter(SEND_WIZARD_SCENE_ID))
+
+
+
 // tip listener
-const regex = /^!tip \d+,*\d{0,16}/;
+const regex = /^!tip \d+,\d{1,16}|\d+/;
 bot.hears(regex, async ctx => {
-  var rgx = /\d+,*\d{0,16}/;
+  var rgx = /\d+,\d{1,16}|\d+/;
   var tipValue = rgx.exec(ctx.message.text);
   var user = UsersDao.getById(ctx.message.from.id)
-  var userBalance = await getUCOBalance(user.wallet).catch(error => {return 0})
+  var index = await archethic.getTransactionIndex(user.wallet, archethicEndpoint)
+  var seedUint8Array = seedStringToUint8Array(user.seed)
+  var lastAddress = archethic.deriveAddress(seedUint8Array,index)
 
+  var userBalance = await getUCOBalance(lastAddress)
+  .catch(error => {
+    logger.error(error)
+    return 0})
 
+  
 
   if(user === undefined ){
     
@@ -229,6 +382,11 @@ bot.hears(regex, async ctx => {
 
   if (ctx.message.reply_to_message?.from?.id === undefined) {
     return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Hey @${ctx.message.from.username}, you can tip by replying to another user. 🛑`)
+    .catch(error => logger.error(error));
+  }
+
+  if(isNaN(Number(tipValue))){
+    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Invalid Number. 🛑`)
     .catch(error => logger.error(error));
   }
 
@@ -254,11 +412,13 @@ bot.hears(regex, async ctx => {
 
   var recipientUser = UsersDao.getById(recipientID)
 
-  archethic.getTransactionIndex(address, archethicEndpoint
+  
+
+  archethic.getTransactionIndex(address, archethicEndpoint)
     .then((index) => {
       var tx = archethic.newTransactionBuilder("transfer")
         .addUCOTransfer(recipientUser.wallet, parseFloat(tipValue[0]))
-        .build(user.seed, index)
+        .build(seedUint8Array, index)
         .originSign(testnetOriginKey)
 
       console.log(tx.toJSON())
@@ -266,10 +426,9 @@ bot.hears(regex, async ctx => {
       try {
 
         archethic.sendTransaction(tx, archethicEndpoint)
-        .catch(error => logger.error(error))
 
         ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: @${ctx.message.from.username} sent ${tipValue[0]} to @${ctx.message.reply_to_message.from.username} ! 💸`)
-        .catch(error => logger.error(error));
+        
 
 
       } catch (error) {
@@ -279,11 +438,7 @@ bot.hears(regex, async ctx => {
 
     )
 
-  )
-
-
-
-
+  
 })
 
 /*
@@ -293,15 +448,19 @@ bot.on('text', (ctx) => {
 
   // Using context shortcut
   //ctx.reply(`Hello ${ctx.state.role}`)
-})*/
+})
 
 bot.on('callback_query', (ctx) => {
   // Explicit usage
   ctx.telegram.answerCbQuery(ctx.callbackQuery.id)
+  .catch(error => logger.error(error));
 
+  console.log(ctx.callbackQuery.data)
   // Using context shortcut
   //ctx.answerCbQuery()
 })
+*/
+
 
 bot.on('inline_query', (ctx) => {
   const result = []
@@ -311,6 +470,8 @@ bot.on('inline_query', (ctx) => {
   // Using context shortcut
   // ctx.answerInlineQuery(result)
 })
+
+
 
 bot.launch()
 
