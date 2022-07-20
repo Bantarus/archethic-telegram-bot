@@ -1,4 +1,5 @@
 import archethic from "archethic";
+import { isHex } from "archethic/lib/utils.js";
 import fetch from "cross-fetch";
 import { Telegraf, Markup, Scenes} from "telegraf";
 import LocalSession from 'telegraf-session-local'
@@ -14,8 +15,9 @@ import  db from "./lib/src/services/database.mjs"
 import {UsersDao} from "./lib/src/services/users_dao.mjs"
 
 // logger
-import log from "./lib/src/services/logger.mjs"
 import logger from "./lib/src/services/logger.mjs";
+//import { WizardContextWizard } from "telegraf/typings/scenes/index.js";
+
 //import { Stage, WizardScene } from "telegraf/typings/scenes/index.js";
 
 // telegraf bot instance
@@ -38,7 +40,15 @@ const GENERATE_WALLET_BUTTON_TEXT = "👛 Generate Wallet";
 const CALLBACK_DATA_SEND = "send"
 const CALLBACK_DATA_RECEIVE = "receive"
 const CALLBACK_DATA_BACKUP_SEED = "seed"
+const CALLBACK_DATA_SEND_CANCEL = "cancel"
 const SEND_WIZARD_SCENE_ID = "SEND_WIZARD"
+
+
+const INLINE_KEYBOARD_PLAY = [
+  [{ text : "💸 Send", callback_data : CALLBACK_DATA_SEND},{ text : "📨 Receive" , callback_data : CALLBACK_DATA_RECEIVE}],
+  [{ text : "🔑 Backup seed", callback_data : CALLBACK_DATA_BACKUP_SEED}]
+  
+]
 
 
 function generatePemText(seed,publicAddress){
@@ -94,6 +104,26 @@ function getUCOBalance(publicAddress){
   
 }
 
+// base text for the play inlineKeyboard
+
+async function getBaseTextPlayKB(user){
+  var seedUint8Array = seedStringToUint8Array(user.seed)
+  
+  var text = "💰 Wallet balance : ";
+  try{
+    var index = await archethic.getTransactionIndex(user.wallet, archethicEndpoint)
+    var lastAddress = archethic.deriveAddress(seedUint8Array,index)
+    var balance =  await getUCOBalance(lastAddress)
+    text+= balance + " UCO"
+
+  }catch(error){
+    text+= "Unavailable"
+    logger.error(error);
+  }
+
+  return text
+}
+
 
 
 bot.command('quit', (ctx) => {
@@ -146,11 +176,11 @@ bot.hears("👛 Wallet", ctx =>{
 
   }
 
-   var walletTextToDraw = user.wallet.substring(0,4) + "..." + user.wallet.substring(user.wallet.length-4,user.wallet.length)
+  // var walletTextToDraw = user.wallet.substring(0,4) + "..." + user.wallet.substring(user.wallet.length-4,user.wallet.length)
 
 
   var keyboardObject = [
-    ["👛 Wallet : " + walletTextToDraw],
+    //["👛 Wallet : " + walletTextToDraw],
     ["▶️ Play"],
     ["🏠 Back"]
   ]
@@ -189,11 +219,11 @@ bot.hears(GENERATE_WALLET_BUTTON_TEXT, ctx =>{
   //ctx.replyWithDocument({source: pemTextBuffer , filename: publicAddress + ".pem" })
   //.catch(error => logger.error(error))
 
-  var walletTextToDraw = user.wallet.substring(0,4) + "..." + user.wallet.substring(user.wallet.length-4,user.wallet.length)
+ // var walletTextToDraw = user.wallet.substring(0,4) + "..." + user.wallet.substring(user.wallet.length-4,user.wallet.length)
 
 
   var keyboardObject = [
-    ["👛 Wallet : " + walletTextToDraw],
+   // ["👛 Wallet : " + walletTextToDraw],
     ["▶️ Play"],
     ["🏠 Back"]
   ]
@@ -211,31 +241,14 @@ bot.hears(GENERATE_WALLET_BUTTON_TEXT, ctx =>{
 bot.hears("▶️ Play", async ctx => {
   var userId = ctx.message.from.id
   var user = UsersDao.getById(userId)
-  var seedUint8Array = seedStringToUint8Array(user.seed)
-  
-  var textReply = "💰 Wallet balance : ";
-  try{
-    var index = await archethic.getTransactionIndex(user.wallet, archethicEndpoint)
-    var lastAddress = archethic.deriveAddress(seedUint8Array,index)
-    var balance =  await getUCOBalance(lastAddress)
-    textReply+= balance + " UCO\n"
 
-  }catch(error){
-    textReply+= "Unavailable"
-    logger.error(error);
-  }
- 
-  
+  var textReply = await getBaseTextPlayKB(user);
 
-  var inlineKeyboardReply = [
-    [{ text : "💸 Send", callback_data : CALLBACK_DATA_SEND},{ text : "📨 Receive" , callback_data : CALLBACK_DATA_RECEIVE}],
-    [{ text : "🔑 Backup seed", callback_data : "some data"}]
-    
-  ]
+  
 
   try {
     return await ctx.telegram.sendMessage(ctx.message.chat.id, textReply,
-      Markup.inlineKeyboard(inlineKeyboardReply));
+      Markup.inlineKeyboard(INLINE_KEYBOARD_PLAY));
   } catch (error) {
     logger.error(error);
     return await ctx.telegram.sendMessage(ctx.message.chat.id, "Management keyboard not accessible.");
@@ -286,37 +299,129 @@ bot.hears("📖 About", ctx => {
 
 // send action scene
 const sendWizard = new Scenes.WizardScene(SEND_WIZARD_SCENE_ID,
-  (ctx) => {
+  async (ctx) => {
 
-    //ctx.reply("Which is the recipient public address ?")
-    ctx.editMessageText("Which is the recipient public address ?",{reply_markup: ctx.update.callback_query.message.reply_markup})
-    .catch(error => error => logger.error(error))
- 
    
-    ctx.wizard.state.sendData = {reply_markup: ctx.update.callback_query.message.reply_markup,
-                                message_id: ctx.update.callback_query.message.message_id}
+    var userID = ctx.callbackQuery.from.id
+    var user = UsersDao.getById(userID)
+
+    ctx.callbackQuery.message.reply_markup
+    
+    var baseTextReply = await getBaseTextPlayKB(user)
+    var replyMarkup = {inline_keyboard: [
+      [{ text: "🔙 Back ( Cancel transfert )", callback_data: CALLBACK_DATA_SEND_CANCEL }]
+    ]}
+
+    
+
+    var textReply = baseTextReply + "\n🤖: Which is the recipient public address ❔"
+
+
+    ctx.editMessageText(textReply, {reply_markup: replyMarkup})
+      .catch(error => {
+        logger.error(error)
+       // return ctx.scene.leave()
+      })
+   
+
+    ctx.wizard.state.sendData = {
+      reply_markup: replyMarkup,
+      callback_message_id: ctx.update.callback_query.message.message_id,
+      base_text: baseTextReply,
+      text_reply: textReply,
+      last_error: 0,
+      current_error:0,
+      last_error_count: 0
+    }
 
     return ctx.wizard.next();
 
   },
   (ctx) => {
     try {
+      //Keep track of the message id in session
+      ctx.wizard.state.sendData.message_id = ctx.message.message_id
+      
+      var hasError = false;
+      var errorTextReply= ""
 
+      // address validation
+      if (!typeof (ctx.message.text) == "string") {
+        ctx.wizard.state.sendData.current_error = 1
+        errorTextReply = ctx.wizard.state.sendData.base_text + `\n🤖: This address is not a string ! ❌`
+        hasError = true;
+        
+      }
+
+      if (!hasError && !isHex(ctx.message.text)) {
+
+        ctx.wizard.state.sendData.current_error = 2
+        errorTextReply = ctx.wizard.state.sendData.base_text + `\n🤖: This address is not in hexadecimal format ! ❌`
+        hasError = true;
+      }
+
+      if (!hasError && ctx.message.text.length != 68) {
+        ctx.wizard.state.sendData.current_error = 3
+        errorTextReply = ctx.wizard.state.sendData.base_text + `\n🤖: Invalid address ! ❌`
+        hasError = true;
+      }
+
+      // if an error was raised
+      if (hasError) {
+
+        if (ctx.wizard.state.sendData.current_error != ctx.wizard.state.sendData.last_error) {
+          ctx.wizard.state.sendData.last_error = ctx.wizard.state.sendData.current_error
+          ctx.wizard.state.sendData.last_error_count = 1
+        } else {
+          ctx.wizard.state.sendData.last_error_count++
+          errorTextReply += `\n🤖: (Warnings ${ctx.wizard.state.sendData.last_error_count}) ⚠️`
+
+        }
+
+        return ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.callback_message_id, undefined, errorTextReply,{reply_markup: ctx.wizard.state.sendData.reply_markup} )
+          .catch(error => logger.error(error));
+      }
 
       ctx.wizard.state.sendData.to = ctx.message.text
 
+      
 
+      var textReply = ctx.wizard.state.sendData.text_reply + "\n  <i>" + ctx.message.text + "</i>"
+      textReply += "\n🤖: UCO amount to send ❔"
 
-      //ctx.reply("UCO amount to send ?")
-      ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.message_id, undefined, "UCO amount to send ?", { reply_markup: ctx.wizard.state.sendData.reply_markup })
-        .catch(error => error => logger.error(error))
+      ctx.wizard.state.sendData.text_reply = textReply
 
+      ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.callback_message_id, undefined, textReply, { reply_markup: ctx.wizard.state.sendData.reply_markup, parse_mode: "HTML" })
+        .then(r => {
+          // reset error state
+          ctx.wizard.state.sendData.last_error = 0
+          ctx.wizard.state.sendData.last_error_count = 0
+          return ctx.wizard.next();
+        })
+        .catch(error => {
+          logger.error(error)
+          let errorTextReply = ctx.wizard.state.sendData.base_text + `\n🤖: Unhandled error : send function not available.❌`
+          ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.callback_message_id, undefined, errorTextReply, { reply_markup: ctx.wizard.state.sendData.reply_markup })
+            .catch(error =>  logger.error(error))
+            return ctx.scene.leave();
+        })
 
-      return ctx.wizard.next();
+        
     } catch (error) {
 
       logger.error(error)
+      let errorTextReply = ctx.wizard.state.sendData.base_text + `\n🤖: Unhandled error : send function not available.❌`
+      ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.callback_message_id, undefined, errorTextReply, { reply_markup: ctx.wizard.state.sendData.reply_markup })
+        .catch(error =>  logger.error(error))
       return ctx.scene.leave();
+    } finally {
+      if (ctx.wizard.state.sendData.message_id != undefined) {
+        // message consumed
+        ctx.deleteMessage(ctx.wizard.state.sendData.message_id)
+          .catch(error => {
+            logger.error(error)
+          })
+      }
     }
     
 
@@ -324,9 +429,12 @@ const sendWizard = new Scenes.WizardScene(SEND_WIZARD_SCENE_ID,
   async (ctx) => {
 
     try {
+      //Keep track of the message id in session
+      ctx.wizard.state.sendData.message_id = ctx.message.message_id
 
       if (isNaN(Number(ctx.message.text))) {
-        return ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.message_id, undefined,`Invalid amount ! ❌`, { reply_markup: ctx.wizard.state.sendData.reply_markup })
+        let errorTextReply = ctx.wizard.state.sendData.text_reply + `\n🤖: Invalid amount ! ❌`
+        return ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.callback_message_id, undefined,errorTextReply, { reply_markup: ctx.wizard.state.sendData.reply_markup  , parse_mode: "HTML"})
           .catch(error => logger.error(error));
       }
 
@@ -338,23 +446,38 @@ const sendWizard = new Scenes.WizardScene(SEND_WIZARD_SCENE_ID,
       var balance = await getUCOBalance(lastAddress)
 
       if (Number(ctx.message.text) > balance) {
-        return ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.message_id, undefined,`Insufficient funds ! ❌`, { reply_markup: ctx.wizard.state.sendData.reply_markup })
+        let errorTextReply = ctx.wizard.state.sendData.text_reply + `\n🤖: Insufficient funds ! ❌`
+        return ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.callback_message_id, undefined,errorTextReply, { reply_markup: ctx.wizard.state.sendData.reply_markup , parse_mode: "HTML"})
           .catch(error => logger.error(error));
       }
 
 
       ctx.wizard.state.sendData.amount = ctx.message.text
-      let textReply = "Send to : " + ctx.wizard.state.sendData.to + "\n"
-      textReply += "Amount : " + ctx.wizard.state.sendData.amount + " UCO" + "\n"
-      textReply += "Do you confirm ? NO|YES"
 
-      ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.message_id, undefined,textReply, { reply_markup: ctx.wizard.state.sendData.reply_markup })
+      
+
+      var textReply = ctx.wizard.state.sendData.text_reply + `\n ` + ctx.message.text
+      textReply += "\n🤖: Do you confirm ? NO|YES"
+
+      ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.callback_message_id, undefined,textReply, { reply_markup: ctx.wizard.state.sendData.reply_markup , parse_mode: "HTML"})
         .catch(error => logger.error(error));
       return ctx.wizard.next();
     }
     catch(error){
       logger.error(error)
+      let errorTextReply = ctx.wizard.state.sendData.base_text + `\n🤖: Unhandled error : send function not available.❌`
+      ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.callback_message_id, undefined, errorTextReply, { reply_markup: ctx.wizard.state.sendData.reply_markup })
+        .catch(error =>  logger.error(error))
       return ctx.scene.leave();
+    } finally {
+      if (ctx.wizard.state.sendData.message_id != undefined) {
+        // message consumed
+        ctx.deleteMessage(ctx.wizard.state.sendData.message_id)
+          .catch(error => {
+            logger.error(error)
+          })
+      }
+
     }
 
   },
@@ -363,56 +486,74 @@ const sendWizard = new Scenes.WizardScene(SEND_WIZARD_SCENE_ID,
     // if YES
     // sign transfert on chain 
     //
-      try {
-        if(ctx.message.text === "YES"){
-      var user = UsersDao.getById(ctx.message.from.id);
-      var seedUint8Array = seedStringToUint8Array(user.seed)
+    try {
+      //Keep track of the message id in session
+      ctx.wizard.state.sendData.message_id = ctx.message.message_id
       
+      if (ctx.message.text === "YES") {
+        
+        
 
-      var originKey = archethic.getOriginKey()
-
-      archethic.getTransactionIndex(user.wallet, archethicEndpoint)
-        .then((index) => {
-          var tx = archethic.newTransactionBuilder("transfer")
-            .addUCOTransfer(ctx.wizard.state.sendData.to, parseFloat(ctx.wizard.state.sendData.amount))
-            .build(seedUint8Array, index)
-            .originSign(originKey)
-    
-          console.log(tx.toJSON())
-    
-         
-
-          archethic.sendTransaction(tx, archethicEndpoint)
-            .then(r => {
-              ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.message_id, undefined, `🤖: UCO sent ! 💸`
-                , { reply_markup: ctx.wizard.state.sendData.reply_markup })
-                .catch(error => logger.error(error));
-            }
+        var user = UsersDao.getById(ctx.message.from.id);
+        var seedUint8Array = seedStringToUint8Array(user.seed)
 
 
-            )
-            .catch(error => error => logger.error(error))
-    
-            
-    
-    
-          
-        }
-    
-        ).catch(error => error => logger.error(error))
-    
-      }else{
-        ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.message_id, undefined,`Transfert cancelled. ❌`
-        , { reply_markup: ctx.wizard.state.sendData.reply_markup })
-      .catch(error => logger.error(error));
-      return ctx.scene.leave();
+        var originKey = archethic.getOriginKey()
+
+        archethic.getTransactionIndex(user.wallet, archethicEndpoint)
+          .then((index) => {
+            var tx = archethic.newTransactionBuilder("transfer")
+              .addUCOTransfer(ctx.wizard.state.sendData.to, parseFloat(ctx.wizard.state.sendData.amount))
+              .build(seedUint8Array, index)
+              .originSign(originKey)
+
+            console.log(tx.toJSON())
+
+
+
+            archethic.sendTransaction(tx, archethicEndpoint)
+              .then(r => {
+                let textReply = ctx.wizard.state.sendData.base_text + `\n🤖: UCO sent ! 💸`
+                ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.callback_message_id, undefined, textReply
+                  , Markup.inlineKeyboard(INLINE_KEYBOARD_PLAY))
+
+              }
+
+
+              )
+
+
+
+
+
+
+          }
+
+          )
+
+      } else {
+        let cancelledText = ctx.wizard.state.sendData.base_text + `\n🤖: Transfert cancelled. ❌`
+        ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.callback_message_id, undefined, cancelledText
+          , Markup.inlineKeyboard(INLINE_KEYBOARD_PLAY))
+
+        return ctx.scene.leave();
       }
 
     } catch (error) {
       logger.error(error)
+      let errorTextReply = ctx.wizard.state.sendData.base_text + `\n🤖: Unhandled error : send function not available. ❌`
+      ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.callback_message_id, undefined, errorTextReply, { reply_markup: ctx.wizard.state.sendData.reply_markup })
+        .catch(error => logger.error(error))
     }
-    finally{
-
+    finally {
+      if (ctx.wizard.state.sendData.message_id != undefined) {
+        // message consumed
+        ctx.deleteMessage(ctx.wizard.state.sendData.message_id)
+          .catch(error => {
+            logger.error(error)
+          })
+      }
+      
       return ctx.scene.leave();
     }
     
@@ -423,10 +564,26 @@ const sendWizard = new Scenes.WizardScene(SEND_WIZARD_SCENE_ID,
 
 // add send wizard scene to a middleware
 const stage = new Scenes.Stage([sendWizard]);
+
+// cancel send scene
+
+stage.action(CALLBACK_DATA_SEND_CANCEL, async ctx => {
+  var user = UsersDao.getById(ctx.callbackQuery.from.id)
+  let cancelledText = await getBaseTextPlayKB(user) + `\n🤖: Transfert cancelled. ❌`
+  ctx.telegram.editMessageText(ctx.chat.id, ctx.callbackQuery.message.message_id, undefined, cancelledText
+    , Markup.inlineKeyboard(INLINE_KEYBOARD_PLAY))
+
+    
+  ctx.scene.leave()
+})
+
+
 // register before using enter 
 
 bot.use(new LocalSession({}).middleware())
 bot.use(stage.middleware()) 
+
+
 
 // send inline button action to enter scene
 
@@ -450,16 +607,17 @@ bot.action(CALLBACK_DATA_RECEIVE, async ctx => {
  
   var qrCodeBuffer = await QRCode.toBuffer(address)
   ctx.replyWithPhoto({ source: qrCodeBuffer, filename: 'qrcode' , type:'multipart/form-data' })
-  .catch(error => error => logger.error(error))
+  .catch(error =>  logger.error(error))
 
-  var qrTextUpdate = "You can use the qrcode below or click on your public address to copy it : `" + address + "` \n"
-  
+  getBaseTextPlayKB(user).then( (ucoBalanceText ) => {
+    let qrTextUpdate = ucoBalanceText + `\n🤖: Click to copy your address : <code>` + address + `</code>`
+    qrTextUpdate += `\n🤖: Or use your QRCode below`
 
-  ctx.editMessageText(qrTextUpdate,{reply_markup: ctx.update.callback_query.message.reply_markup, parse_mode: "MarkdownV2"})
-  .catch(error => error => logger.error(error))
- 
- 
-
+    ctx.editMessageText(qrTextUpdate,{reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML"})
+    .catch(error =>  logger.error(error))
+   
+   
+  })
 } ) 
 
 
@@ -570,7 +728,7 @@ bot.on('text', (ctx) => {
   // Using context shortcut
   //ctx.reply(`Hello ${ctx.state.role}`)
 })
-*/
+
 bot.on('callback_query', (ctx) => {
   // Explicit usage
   ctx.telegram.answerCbQuery(ctx.callbackQuery.id)
@@ -591,7 +749,7 @@ bot.on('inline_query', (ctx) => {
   // Using context shortcut
   // ctx.answerInlineQuery(result)
 })
-
+*/
 
 
 bot.launch()
