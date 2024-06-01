@@ -250,7 +250,7 @@ bot.hears(GENERATE_WALLET_BUTTON_TEXT, ctx =>{
   ctx.telegram.sendMessage(ctx.message.chat.id, "Wallet generated :")
     .catch(error => logger.error(error))
 
-  ctx.telegram.sendMessage(ctx.message.chat.id, publicAddress,
+  ctx.telegram.sendMessage(ctx.message.chat.id, user.wallet,
     Markup.keyboard(keyboardObject))
     .catch(error => logger.error(error))
 })
