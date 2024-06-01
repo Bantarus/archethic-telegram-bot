@@ -75,60 +75,18 @@ function seedStringToUint8Array(seed){
 }
 
 
-function getUCOBalance(publicAddress){
 
 
-return archethic.network.getBalance(publicAddress)
 
-  .then((balance) =>{
-    if (balance == null) {
-      console.log("balance is null")
-      return 0;
-    } else {
-      console.log(balance.uco)
-      return balance.uco;
-    }
-  });
+// base text for the open inlineKeyboard
 
-/* 
-  return fetch(archethicEndpoint + "/api", {
-    method: "POST",
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    },
-    body: JSON.stringify({
-      query: `query {
-                  balance(address: "${publicAddress}"){
-                    uco
-                  }
-              }`
-    })
-  })
-  .then(r => r.json())
-  .then((res) =>{
-    if (res.data == null) {
-      console.log("res.data is null")
-      return 0;
-    } else {
-      console.log(res.data.balance.uco)
-      return res.data.balance.uco;
-    }
-  }); */
-
- 
-  
-}
-
-// base text for the play inlineKeyboard
-
-async function getBaseTextPlayKB(user){
+async function getBaseTextOpenKB(user){
   var seedUint8Array = seedStringToUint8Array(user.seed)
   
   var text = "💰 Wallet balance : ";
   try{
     var index = await archethic.transaction.getTransactionIndex(user.wallet)
-    logger.info("lets go here !")
+    
     var lastAddress = Crypto.deriveAddress(seedUint8Array,index)
     
     const balance =  await archethic.network.getBalance(lastAddress)
@@ -261,7 +219,7 @@ bot.hears("🔓 Open", async ctx => {
   var userId = ctx.message.from.id
   var user = UsersDao.getById(userId)
 
-  var textReply = await getBaseTextPlayKB(user);
+  var textReply = await getBaseTextOpenKB(user);
 
   
 
@@ -332,7 +290,7 @@ const sendWizard = new Scenes.WizardScene(SEND_WIZARD_SCENE_ID,
 
     ctx.callbackQuery.message.reply_markup
     
-    var baseTextReply = await getBaseTextPlayKB(user)
+    var baseTextReply = await getBaseTextOpenKB(user)
     var replyMarkup = {inline_keyboard: [
       [{ text: "🔙 Back ( Cancel transfert )", callback_data: CALLBACK_DATA_SEND_CANCEL }]
     ]}
@@ -528,25 +486,30 @@ const sendWizard = new Scenes.WizardScene(SEND_WIZARD_SCENE_ID,
           .then((index) => {
             const tx = archethic.transaction.new()
             .setType("transfer")
-            .addUCOTransfer(ctx.wizard.state.sendData.to, parseFloat(ctx.wizard.state.sendData.amount))
+            .addUCOTransfer(ctx.wizard.state.sendData.to, parseFloat(ctx.wizard.state.sendData.amount * 10 ** 8))
             .build(seedUint8Array, index)
-            .originSign(originPrivateKey);
+            .originSign(originPrivateKey)
+            .on("confirmation", (nbConf, maxConf) => {
+              console.log(nbConf, maxConf)
+              if (nbConf == maxConf ){
+                let textReply = ctx.wizard.state.sendData.base_text + `\n🤖: UCO sent ! 💸`
+                ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.callback_message_id, undefined, textReply
+                  , Markup.inlineKeyboard(INLINE_KEYBOARD_PLAY))
+              }
+
+            })
+            ;
+
             
 
             console.log(tx.toJSON())
 
 
 
-            tx.send()
-              .then(r => {
-                let textReply = ctx.wizard.state.sendData.base_text + `\n🤖: UCO sent ! 💸`
-                ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.callback_message_id, undefined, textReply
-                  , Markup.inlineKeyboard(INLINE_KEYBOARD_PLAY))
-
-              }
+            tx.send();
+           
 
 
-              )
 
 
 
@@ -595,7 +558,7 @@ const stage = new Scenes.Stage([sendWizard]);
 
 stage.action(CALLBACK_DATA_SEND_CANCEL, async ctx => {
   var user = UsersDao.getById(ctx.callbackQuery.from.id)
-  let cancelledText = await getBaseTextPlayKB(user) + `\n🤖: Transfert cancelled. ❌`
+  let cancelledText = await getBaseTextOpenKB(user) + `\n🤖: Transfert cancelled. ❌`
   ctx.telegram.editMessageText(ctx.chat.id, ctx.callbackQuery.message.message_id, undefined, cancelledText
     , Markup.inlineKeyboard(INLINE_KEYBOARD_PLAY))
 
@@ -635,7 +598,7 @@ bot.action(CALLBACK_DATA_RECEIVE, async ctx => {
   ctx.replyWithPhoto({ source: qrCodeBuffer, filename: 'qrcode' , type:'multipart/form-data' })
   .catch(error =>  logger.error(error))
 
-  getBaseTextPlayKB(user).then( (ucoBalanceText ) => {
+  getBaseTextOpenKB(user).then( (ucoBalanceText ) => {
     let qrTextUpdate = ucoBalanceText + `\n🤖: Click to copy your address : <code>` + address + `</code>`
     qrTextUpdate += `\n🤖: Or use your QRCode below`
 
@@ -724,7 +687,7 @@ bot.command('tip', async ctx => {
  
   var tx = archethic.transaction.new()
   .setType("transfer")
-  .addUCOTransfer(recipientUser.wallet, parseFloat(tipValue[0]))
+  .addUCOTransfer(recipientUser.wallet, parseFloat(tipValue[0]) * 10 ** 8)
   .build(seedUint8Array, index)
   .originSign(originPrivateKey)
 
