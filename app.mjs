@@ -1,11 +1,10 @@
-import archethic from "archethic";
-import { isHex } from "archethic/lib/utils.js";
+
+import Archethic, { Utils, Crypto } from "@archethicjs/sdk"
 import fetch from "cross-fetch";
 import { Telegraf, Markup, Scenes} from "telegraf";
 import LocalSession from 'telegraf-session-local'
 import  QRCode  from "qrcode";
 
-const randomSecretKey = archethic.randomSecretKey;
 
 
 
@@ -31,8 +30,12 @@ const bot = new Telegraf(token)
 
 // Archethic global variables
 const archethicEndpoint = "https://testnet.archethic.net";
-const testnetOriginKey = "01019280BDB84B8F8AEDBA205FE3552689964A5626EE2C60AA10E3BF22A91A036009"
+
+const originPrivateKey = Utils.originPrivateKey
+
 const curveType = "ed25519";
+const archethic = new Archethic(archethicEndpoint);
+await archethic.connect();
 
 // functionnals global variables
 const WALLET_BUTTON_TEXT = "Wallet";
@@ -52,7 +55,7 @@ const INLINE_KEYBOARD_PLAY = [
 
 
 function generatePemText(seed,publicAddress){
-  const { privateKey }  = archethic.deriveKeyPair(seed,0);
+  const { privateKey }  = Crypto.deriveKeyPair(seed,0);
   var pemText = "-----BEGIN PRIVATE KEY for " + publicAddress + "-----" + "\n";
   pemText+= Buffer.from(privateKey).toString('base64').replace(/.{64}/g, '$&\n') + "\n";
   pemText+= "-----END PRIVATE KEY for "+ publicAddress + "-----";
@@ -75,6 +78,19 @@ function seedStringToUint8Array(seed){
 function getUCOBalance(publicAddress){
 
 
+return archethic.network.getBalance(publicAddress)
+
+  .then((balance) =>{
+    if (balance == null) {
+      console.log("balance is null")
+      return 0;
+    } else {
+      console.log(balance.uco)
+      return balance.uco;
+    }
+  });
+
+/* 
   return fetch(archethicEndpoint + "/api", {
     method: "POST",
     headers: {
@@ -98,7 +114,7 @@ function getUCOBalance(publicAddress){
       console.log(res.data.balance.uco)
       return res.data.balance.uco;
     }
-  });
+  }); */
 
  
   
@@ -111,10 +127,13 @@ async function getBaseTextPlayKB(user){
   
   var text = "💰 Wallet balance : ";
   try{
-    var index = await archethic.getTransactionIndex(user.wallet, archethicEndpoint)
-    var lastAddress = archethic.deriveAddress(seedUint8Array,index)
-    var balance =  await getUCOBalance(lastAddress)
-    text+= balance + " UCO"
+    var index = await archethic.transaction.getTransactionIndex(user.wallet)
+    logger.info("lets go here !")
+    var lastAddress = Crypto.deriveAddress(seedUint8Array,index)
+    
+    const balance =  await archethic.network.getBalance(lastAddress)
+    
+    text+= balance.uco / 10 ** 8 + " UCO"
 
   }catch(error){
     text+= "Unavailable"
@@ -181,11 +200,11 @@ bot.hears("👛 Wallet", ctx =>{
 
   var keyboardObject = [
     //["👛 Wallet : " + walletTextToDraw],
-    ["▶️ Play"],
+    ["🔓 Open"],
     ["🏠 Back"]
   ]
   
-  return ctx.telegram.sendMessage(ctx.message.chat.id, "Wallet generated.",
+  return ctx.telegram.sendMessage(ctx.message.chat.id, "Wallet find.",
     Markup.keyboard(keyboardObject))
     .catch(error => logger.error(error))
 
@@ -197,10 +216,10 @@ bot.hears(GENERATE_WALLET_BUTTON_TEXT, ctx =>{
 
   var userId = ctx.message.from.id
   var chatId = ctx.message.chat.id;
-  var seed = randomSecretKey();
+  var seed = Crypto.randomSecretKey();
   var index = 0;
 
-  var publicAddress = archethic.deriveAddress(seed,index)
+  var publicAddress = Crypto.deriveAddress(seed,index)
   
 
 
@@ -211,7 +230,7 @@ bot.hears(GENERATE_WALLET_BUTTON_TEXT, ctx =>{
     .catch(error => logger.error(error));
   }
 
-  user.wallet = publicAddress;
+  user.wallet = Utils.uint8ArrayToHex(publicAddress);
   user.seed = seed.toString()
   db.write()
   
@@ -224,7 +243,7 @@ bot.hears(GENERATE_WALLET_BUTTON_TEXT, ctx =>{
 
   var keyboardObject = [
    // ["👛 Wallet : " + walletTextToDraw],
-    ["▶️ Play"],
+    ["🔓 Open"],
     ["🏠 Back"]
   ]
 
@@ -238,7 +257,7 @@ bot.hears(GENERATE_WALLET_BUTTON_TEXT, ctx =>{
 
 
 
-bot.hears("▶️ Play", async ctx => {
+bot.hears("🔓 Open", async ctx => {
   var userId = ctx.message.from.id
   var user = UsersDao.getById(userId)
 
@@ -270,7 +289,7 @@ Begin with the <b>/start</b> command to register with me.
 
 Then generate your wallet with the [👛 Wallet] button from the Home keyboard.
 
-Finally invoke the play keyboard by clicking on the [▶️ Play] button to interact with your wallet.
+Finally invoke the open inline keyboard by clicking on the [🔓 Open] button to interact with your wallet.
 
 You can also tips others users in group chat by replying to them with the <b>/tip</b> command with the <b>UCO amount</b> to send as <b>argument</b>.` 
 
@@ -290,7 +309,13 @@ bot.hears("🦮 Help", ctx => {
 })
 
 bot.hears("📖 About", ctx => {
-  ctx.telegram.sendMessage(ctx.message.chat.id, "Telegram bot done with Telegraf and Archethic javascript libraries.")
+  ctx.telegram.sendMessage(ctx.message.chat.id, `Telegram bot done with Telegraf and Archethic javascript libraries.
+
+                    ⚠️ Disclaimer ⚠️
+
+This bot is for recreational purposes only. Use it with caution. The creator is not responsible for any loss or damage resulting from the use of this bot.
+`
+  ,{ parse_mode: "HTML"})
   .catch(error => logger.error(error))
 })
 
@@ -353,7 +378,7 @@ const sendWizard = new Scenes.WizardScene(SEND_WIZARD_SCENE_ID,
         
       }
 
-      if (!hasError && !isHex(ctx.message.text)) {
+      if (!hasError && !Utils.isHex(ctx.message.text)) {
 
         ctx.wizard.state.sendData.current_error = 2
         errorTextReply = ctx.wizard.state.sendData.base_text + `\n🤖: This address is not in hexadecimal format ! ❌`
@@ -441,11 +466,11 @@ const sendWizard = new Scenes.WizardScene(SEND_WIZARD_SCENE_ID,
       var userId = ctx.message.from.id
       var user = UsersDao.getById(userId)
       var seedUint8Array = seedStringToUint8Array(user.seed)
-      var index = await archethic.getTransactionIndex(user.wallet, archethicEndpoint)
-      var lastAddress = archethic.deriveAddress(seedUint8Array,index)
-      var balance = await getUCOBalance(lastAddress)
+      var index = await archethic.transaction.getTransactionIndex(user.wallet)
+      var lastAddress = Crypto.deriveAddress(seedUint8Array,index)
+      var balance = await archethic.network.getBalance(lastAddress)
 
-      if (Number(ctx.message.text) > balance) {
+      if (Number(ctx.message.text) > balance.uco / 10 ** 8) {
         let errorTextReply = ctx.wizard.state.sendData.text_reply + `\n🤖: Insufficient funds ! ❌`
         return ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.callback_message_id, undefined,errorTextReply, { reply_markup: ctx.wizard.state.sendData.reply_markup , parse_mode: "HTML"})
           .catch(error => logger.error(error));
@@ -498,20 +523,21 @@ const sendWizard = new Scenes.WizardScene(SEND_WIZARD_SCENE_ID,
         var seedUint8Array = seedStringToUint8Array(user.seed)
 
 
-        var originKey = archethic.getOriginKey()
 
-        archethic.getTransactionIndex(user.wallet, archethicEndpoint)
+        archethic.transaction.getTransactionIndex(user.wallet)
           .then((index) => {
-            var tx = archethic.newTransactionBuilder("transfer")
-              .addUCOTransfer(ctx.wizard.state.sendData.to, parseFloat(ctx.wizard.state.sendData.amount))
-              .build(seedUint8Array, index)
-              .originSign(originKey)
+            const tx = archethic.transaction.new()
+            .setType("transfer")
+            .addUCOTransfer(ctx.wizard.state.sendData.to, parseFloat(ctx.wizard.state.sendData.amount))
+            .build(seedUint8Array, index)
+            .originSign(originPrivateKey);
+            
 
             console.log(tx.toJSON())
 
 
 
-            archethic.sendTransaction(tx, archethicEndpoint)
+            tx.send()
               .then(r => {
                 let textReply = ctx.wizard.state.sendData.base_text + `\n🤖: UCO sent ! 💸`
                 ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.callback_message_id, undefined, textReply
@@ -655,17 +681,18 @@ bot.command('tip', async ctx => {
     .catch(error => logger.error(error));
   }
 
-  var index = await archethic.getTransactionIndex(user.wallet, archethicEndpoint)
+  var index = await archethic.transaction.getTransactionIndex(user.wallet)
   var seedUint8Array = seedStringToUint8Array(user.seed)
-  var lastAddress = archethic.deriveAddress(seedUint8Array,index)
+  var lastAddress = Crypto.deriveAddress(seedUint8Array,index)
 
-  var userBalance = await getUCOBalance(lastAddress)
+  var userBalance = await archethic.network.getBalance(lastAddress)
+  
   .catch(error => {
     logger.error(error)
     return 0})
 
 
-  if (tipValue[0] > userBalance){
+  if (tipValue[0] > userBalance.uco / 10 ** 8){
     return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Hey ${ctx.message.from.first_name}, waiting for payday ? Insufficients funds. 🛑`)
     .catch(error => logger.error(error));
   }
@@ -695,16 +722,18 @@ bot.command('tip', async ctx => {
   
 
  
-  var tx = archethic.newTransactionBuilder("transfer")
-    .addUCOTransfer(recipientUser.wallet, parseFloat(tipValue[0]))
-    .build(seedUint8Array, index)
-    .originSign(testnetOriginKey)
+  var tx = archethic.transaction.new()
+  .setType("transfer")
+  .addUCOTransfer(recipientUser.wallet, parseFloat(tipValue[0]))
+  .build(seedUint8Array, index)
+  .originSign(originPrivateKey)
 
   console.log(tx.toJSON())
 
   try {
 
-    archethic.sendTransaction(tx, archethicEndpoint)
+   
+    tx.send()
 
     ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: ${ctx.message.from.first_name} sent ${tipValue[0]} to ${ctx.message.reply_to_message.from.first_name} ! 💸`)
 

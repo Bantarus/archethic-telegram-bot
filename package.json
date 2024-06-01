@@ -9,7 +9,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "archethic": "^1.9.1",
+    "@archethicjs/sdk": "^1.20.3",
+    "archethic": "^1.18.2",
     "bip39": "^3.0.4",
     "lowdb": "^3.0.0",
     "qrcode": "^1.5.1",
