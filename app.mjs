@@ -118,15 +118,28 @@ bot.command('quit', (ctx) => {
 // start - Let's begin your transactionchain journey !
 bot.command('start', ctx => {
 
-  if(ctx.message.chat.type !== "private"){
-    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: We should take a private room to do this.\n Open a private chat with @${ctx.botInfo.username} to start interacting with him.`)
-    .catch(error => logger.error(error));
+  if(ctx.message.chat.type !== "private" && !ctx.message.text.includes(ctx.botInfo.username)){
+    return;
   }
 
-  var userId = ctx.message.from.id
+  if(ctx.message.chat.type !== "private" && ctx.message.text.includes(ctx.botInfo.username) ){
+  //  return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: We should take a private room to do this.\n Open a private chat with @${ctx.botInfo.username} to start interacting with him.`)
+   return ctx.reply(`🤖: We should take a private room to do this.\n Open a private chat with @${ctx.botInfo.username} to start interacting with me.`,{
+    reply_to_message_id : ctx.message.message_id
+   })
+  .catch(error => logger.error(error));
+  }
+  
+  
+
+
+
+  const userId = ctx.message.from.id
+  const username = ctx.message.from.username
+
   db.read()
   if (!db.data.users.some(user => user.id === userId )){
-    db.data.users.push({ id : userId})
+    db.data.users.push({ id : userId, name : username })
     db.write()
   }else{
     console.log("Welcome back:" + userId)
@@ -253,7 +266,12 @@ You can also tips others users in group chat by replying to them with the <b>/ti
 
 
 bot.command("help", ctx => {
-  if(ctx.message.chat.type !== "private"){
+
+  if(ctx.message.chat.type !== "private" && !ctx.message.text.includes(ctx.botInfo.username)){
+    return;
+  }
+
+  if(ctx.message.chat.type !== "private" && ctx.message.text.includes(ctx.botInfo.username)){
     return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: We should take a private room to do this.\n Open a private chat with @${ctx.botInfo.username} to start interacting with me.`)
     .catch(error => logger.error(error));
   }
@@ -619,29 +637,48 @@ bot.action(CALLBACK_DATA_RECEIVE, async ctx => {
 bot.command('tip', async ctx => {
 //bot.hears(regex, async ctx => {
  
-  var rgx = /(\d+,\d{1,16}|\d+)/;
-  var tipValue = rgx.exec(ctx.message.text.substring(5));
+ //  var rgx = /(\d+,\d{1,16}|\d+)/;
+ const rgx = /^\/tip\s+@(\w+)\s+(\d+(?:,\d{1,16})?|\d+)/
+ const match = rgx.exec(ctx.message.text);
+
+ if (!match) {
+  return ctx.reply(`🤖: Bad command : Usage : /tip @username amount. 🛑`, {
+    reply_to_message_id: ctx.message.message_id
+  })
+  .catch(error => logger.error(error));
+}
+
+  const [, username, tipValue] = match;
+  //var tipValue = rgx.exec(ctx.message.text.substring(5)); 
   var user = UsersDao.getById(ctx.message.from.id)
   
   
+  
+  logger.info(`tip amount : ${tipValue}`)
 
   if(user === undefined ){
     
-    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Unknown life form : ${ctx.message.from.first_name}. 🛑`)
+   // return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Unregistred life form : ${ctx.message.from.first_name}. 🛑`)
+   return ctx.reply(`🤖: Unregistred life form : ${ctx.message.from.first_name}. 🛑`, {
+    reply_to_message_id: ctx.message.message_id
+  })
     .catch(error => logger.error(error));
   }
 
   
 
-  if (ctx.message.reply_to_message?.from?.id === undefined) {
+/*   if (ctx.message.reply_to_message?.from?.id === undefined) {
     return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Hey ${ctx.message.from.first_name}, you can tip by replying to another user. 🛑`)
     .catch(error => logger.error(error));
-  }
+  } */
 
   
 
-  if(isNaN(Number(tipValue[0]))){
-    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Invalid Number. 🛑`)
+  if(isNaN(Number(tipValue))){
+   // return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Invalid Number. 🛑`)
+   return ctx.reply(`🤖: Invalid Number. 🛑`, {
+    reply_to_message_id: ctx.message.message_id
+  })
     .catch(error => logger.error(error));
   }
 
@@ -656,47 +693,60 @@ bot.command('tip', async ctx => {
     return 0})
 
 
-  if (tipValue[0] > userBalance.uco / 10 ** 8){
-    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Hey ${ctx.message.from.first_name}, waiting for payday ? Insufficients funds. 🛑`)
+  if (tipValue > userBalance.uco / 10 ** 8){
+   // return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Hey ${ctx.message.from.first_name}, waiting for payday ? Insufficients funds. 🛑`)
+   return ctx.reply(`🤖: Hey ${ctx.message.from.first_name}, waiting for payday ? Insufficients funds. 🛑`,{
+    reply_to_message_id: ctx.message.message_id
+   })
     .catch(error => logger.error(error));
   }
 
-  var recipientID = ctx.message.reply_to_message.from.id
-  var recipientUser = UsersDao.getById(recipientID)
+ // var recipientID = ctx.message.reply_to_message.from.id
+ // var recipientUser = UsersDao.getById(recipientID)
+ var recipientUser = UsersDao.getByName(username)
 
   if (recipientUser === undefined) {
-    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: ${ctx.message.reply_to_message.from.first_name} is not registered with me ! 🛑`)
+    //return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: ${ctx.message.reply_to_message.from.first_name} is not registered with me ! 🛑`)
+    return ctx.reply(`🤖: @${username} is not registered with me ! 🛑`,{
+      reply_to_message_id: ctx.message.message_id
+     })
     .catch(error => logger.error(error));
   }
 
   if (recipientUser.wallet === undefined) {
-    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: ${ctx.message.reply_to_message.from.first_name} has not generated a wallet ! 🛑`)
+   // return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: ${ctx.message.reply_to_message.from.first_name} has not generated a wallet ! 🛑`)
+    return ctx.reply(`🤖: @${username} has not generated a wallet ! 🛑`,{
+      reply_to_message_id: ctx.message.message_id
+     })
     .catch(error => logger.error(error));
   }
 
-  if(recipientID === user.id){
-    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: You are wasting my time ! ${ctx.message.from.first_name} is tipping himself... 🛑`)
+  if(recipientUser.id === user.id){
+   // return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: You are wasting my time ! ${ctx.message.from.first_name} is tipping himself... 🛑`)
+   return ctx.reply(`🤖: You are wasting my time ! ${ctx.message.from.first_name} is tipping himself... 🛑`,{
+    reply_to_message_id: ctx.message.message_id
+   })
     .catch(error => logger.error(error));
   }
 
   
 
-  var recipientUser = UsersDao.getById(recipientID)
-
-  
 
   var isConfirmed = false
   var tx = archethic.transaction.new()
   .setType("transfer")
-  .addUCOTransfer(recipientUser.wallet, parseFloat(tipValue[0]) * 10 ** 8)
+  .addUCOTransfer(recipientUser.wallet, parseFloat(tipValue) * 10 ** 8 )
   .build(seedUint8Array, index)
   .originSign(originPrivateKey)
   .on("confirmation", (nbConf, maxConf) => {
     console.log(nbConf, maxConf)
     if (nbConf == maxConf && !isConfirmed ){
       isConfirmed = true
-      ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: ${ctx.message.from.first_name} sent ${tipValue[0]} to ${ctx.message.reply_to_message.from.first_name} ! 💸`)
+    //  ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: ${ctx.message.from.first_name} sent ${tipValue[0]} to ${ctx.message.reply_to_message.from.first_name} ! 💸`)
 
+    return ctx.reply(`🤖: ${ctx.message.from.first_name} sent ${tipValue} to @${username} ! 💸`,{
+      reply_to_message_id: ctx.message.message_id
+     })
     }
 
   })
