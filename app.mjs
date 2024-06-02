@@ -736,7 +736,12 @@ bot.command('tip', async ctx => {
     .catch(error => logger.error(error));
   }
 
-  
+  if (user.wallet === undefined) {
+     return ctx.reply(`🤖: You need to generate a wallet first ! 🛑`,{
+       reply_to_message_id: ctx.message.message_id
+      })
+     .catch(error => logger.error(error));
+   }
 
 /*   if (ctx.message.reply_to_message?.from?.id === undefined) {
     return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Hey ${ctx.message.from.first_name}, you can tip by replying to another user. 🛑`)
