@@ -690,7 +690,14 @@ bot.command('tip', async ctx => {
   .addUCOTransfer(recipientUser.wallet, parseFloat(tipValue[0]) * 10 ** 8)
   .build(seedUint8Array, index)
   .originSign(originPrivateKey)
+  .on("confirmation", (nbConf, maxConf) => {
+    console.log(nbConf, maxConf)
+    if (nbConf == maxConf ){
+      ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: ${ctx.message.from.first_name} sent ${tipValue[0]} to ${ctx.message.reply_to_message.from.first_name} ! 💸`)
 
+    }
+
+  })
   console.log(tx.toJSON())
 
   try {
@@ -698,8 +705,7 @@ bot.command('tip', async ctx => {
    
     tx.send()
 
-    ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: ${ctx.message.from.first_name} sent ${tipValue[0]} to ${ctx.message.reply_to_message.from.first_name} ! 💸`)
-
+    
 
 
   } catch (error) {
