@@ -262,7 +262,8 @@ Then generate your wallet with the [👛 Wallet] button from the Home keyboard.
 
 Finally invoke the open inline keyboard by clicking on the [🔓 Open] button to interact with your wallet.
 
-You can also tips others users in group chat by using the <b>/tip</b> command as following : /tip <b>@username</b> <b>UCO_amount</b>.` 
+You can also tips others users in group chat by using the <b>/tip</b> command as following : 
+/tip <b>@username</b> <b>10</b>.` 
 
 
 bot.command("help", ctx => {
