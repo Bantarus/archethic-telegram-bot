@@ -722,7 +722,6 @@ bot.command('tip', async ctx => {
 }
 
   const [, username, tipValue] = match;
-  //var tipValue = rgx.exec(ctx.message.text.substring(5)); 
   var user = UsersDao.getById(ctx.message.from.id)
   
   
@@ -731,8 +730,7 @@ bot.command('tip', async ctx => {
 
   if(user === undefined ){
     
-   // return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Unregistred life form : ${ctx.message.from.first_name}. 🛑`)
-   return ctx.reply(`🤖: Unregistred life form : ${ctx.message.from.first_name}. 🛑`, {
+   return ctx.reply(`🤖: Unregistred life form : ${ctx.message.from.first_name} 🛑. Open a private chat with @${ctx.botInfo.username} to start interacting with me.`, {
     reply_to_message_id: ctx.message.message_id
   })
     .catch(error => logger.error(error));
@@ -817,7 +815,7 @@ bot.command('tip', async ctx => {
       isConfirmed = true
     //  ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: ${ctx.message.from.first_name} sent ${tipValue[0]} to ${ctx.message.reply_to_message.from.first_name} ! 💸`)
 
-    return ctx.reply(`🤖: ${ctx.message.from.first_name} sent ${tipValue} to @${username} ! 💸`,{
+    return ctx.reply(`🤖: ${ctx.message.from.first_name} sent ${tipValue} UCO to @${username} ! 💸`,{
       reply_to_message_id: ctx.message.message_id
      })
     }
