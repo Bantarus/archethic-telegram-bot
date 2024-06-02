@@ -479,7 +479,7 @@ const sendWizard = new Scenes.WizardScene(SEND_WIZARD_SCENE_ID,
 
         var user = UsersDao.getById(ctx.message.from.id);
         var seedUint8Array = seedStringToUint8Array(user.seed)
-
+        var isConfirmed = false
 
 
         archethic.transaction.getTransactionIndex(user.wallet)
@@ -491,7 +491,8 @@ const sendWizard = new Scenes.WizardScene(SEND_WIZARD_SCENE_ID,
             .originSign(originPrivateKey)
             .on("confirmation", (nbConf, maxConf) => {
               console.log(nbConf, maxConf)
-              if (nbConf == maxConf ){
+              if (nbConf == maxConf && !isConfirmed){
+                isConfirmed = true
                 let textReply = ctx.wizard.state.sendData.base_text + `\n🤖: UCO sent ! 💸`
                 ctx.telegram.editMessageText(ctx.chat.id, ctx.wizard.state.sendData.callback_message_id, undefined, textReply
                   , Markup.inlineKeyboard(INLINE_KEYBOARD_PLAY))
@@ -684,7 +685,7 @@ bot.command('tip', async ctx => {
 
   
 
- 
+  var isConfirmed = false
   var tx = archethic.transaction.new()
   .setType("transfer")
   .addUCOTransfer(recipientUser.wallet, parseFloat(tipValue[0]) * 10 ** 8)
@@ -692,7 +693,8 @@ bot.command('tip', async ctx => {
   .originSign(originPrivateKey)
   .on("confirmation", (nbConf, maxConf) => {
     console.log(nbConf, maxConf)
-    if (nbConf == maxConf ){
+    if (nbConf == maxConf && !isConfirmed ){
+      isConfirmed = true
       ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: ${ctx.message.from.first_name} sent ${tipValue[0]} to ${ctx.message.reply_to_message.from.first_name} ! 💸`)
 
     }
