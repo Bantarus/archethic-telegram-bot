@@ -4,6 +4,8 @@ import fetch from "cross-fetch";
 import { Telegraf, Markup, Scenes} from "telegraf";
 import LocalSession from 'telegraf-session-local'
 import  QRCode  from "qrcode";
+import * as bip39 from "bip39"
+
 
 
 
@@ -42,14 +44,14 @@ const WALLET_BUTTON_TEXT = "Wallet";
 const GENERATE_WALLET_BUTTON_TEXT = "👛 Generate Wallet";
 const CALLBACK_DATA_SEND = "send"
 const CALLBACK_DATA_RECEIVE = "receive"
-const CALLBACK_DATA_BACKUP_SEED = "seed"
+const CALLBACK_DATA_BACKUP = "seed"
 const CALLBACK_DATA_SEND_CANCEL = "cancel"
 const SEND_WIZARD_SCENE_ID = "SEND_WIZARD"
 
 
 const INLINE_KEYBOARD_PLAY = [
   [{ text : "💸 Send", callback_data : CALLBACK_DATA_SEND},{ text : "📨 Receive" , callback_data : CALLBACK_DATA_RECEIVE}],
-  [{ text : "🔑 Backup seed", callback_data : CALLBACK_DATA_BACKUP_SEED}]
+  [{ text : "🔑 Backup recovery phrase", callback_data : CALLBACK_DATA_BACKUP}]
   
 ]
 
@@ -75,7 +77,14 @@ function seedStringToUint8Array(seed){
 }
 
 
-
+// Function to convert Uint8Array seed to mnemonic phrase
+function uint8ArrayToMnemonic(uint8ArraySeed) {
+  // Convert Uint8Array to Buffer
+  const seedBuffer = Buffer.from(uint8ArraySeed);
+  // Convert Buffer to mnemonic phrase
+  const mnemonic = bip39.entropyToMnemonic(seedBuffer.toString('hex'));
+  return mnemonic.split(' ');
+}
 
 
 // base text for the open inlineKeyboard
@@ -629,6 +638,69 @@ bot.action(CALLBACK_DATA_RECEIVE, async ctx => {
   })
 } ) 
 
+// CALLBACK BACKUP
+
+function formatWords(words) {
+  let message = '';
+  for (let i = 0; i < words.length; i++) {
+    if (i % 4 === 0 && i !== 0) {
+      message += '\n';
+    }
+    message += `${i + 1}. ${words[i]} `;
+  }
+  return message.trim();
+}
+
+
+bot.action(CALLBACK_DATA_BACKUP, async ctx => {
+
+  
+
+  const user = UsersDao.getById(ctx.callbackQuery.from.id)
+  const baseTextReply = await getBaseTextOpenKB(user)
+ 
+  if(user === undefined ){
+     
+   return ctx.reply(`🤖: Unknown life form : ${ctx.callbackQuery.from.first_name} 🛑`)
+   .catch(error => logger.error(error));
+ }
+ 
+  const seedUint8Array = seedStringToUint8Array(user.seed)
+  const words = uint8ArrayToMnemonic(seedUint8Array)
+
+  const recovery_phrase_text = formatWords(words)
+
+  let textUpdate = baseTextReply + `\n🤖: Here your recovery phrase, the message will be automatically deleted after 5 minutes.`
+ 
+  ctx.editMessageText(textUpdate,{reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML"})
+  .catch(error =>  logger.error(error))
+  
+   const sentMessage = await ctx.reply(recovery_phrase_text).catch(error =>  logger.error(error))
+   
+
+     // Delete the message after 300 seconds (300000 milliseconds)
+  setTimeout(async () => {
+    try {
+      await ctx.deleteMessage(sentMessage.message_id);
+      console.log('Message deleted successfully');
+    } catch (err) {
+      if (err.response && err.response.error_code === 400) {
+        console.log('Message was already deleted by the user.');
+      } else {
+        console.error('Failed to delete message:', err);
+      }
+    }
+  }, 300000)
+
+
+   
+ 
+  
+    
+    
+    
+  
+ } ) 
 
 
 // tip handler
