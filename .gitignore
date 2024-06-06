@@ -2,6 +2,7 @@
 .vscode/launch.json
 db.json
 battlechain.json
+battlechain.old.json
 **/log
 sessions.json
 debug.json

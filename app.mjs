@@ -36,7 +36,7 @@ const archethicEndpoint = "https://testnet.archethic.net";
 
 const originPrivateKey = Utils.originPrivateKey
 
-const BATTLECHAIN_ADDRESS = "000014072ca9b2aef0fd833eca9fdd54b3c5acfad61550479755e0a46b606bc19509"
+const BATTLECHAIN_ADDRESS = "0000ba6ae944d618d1fe58ecac00f8bad8139b1bc53c33c2989900f619911ccb9547"
 
 const curveType = "ed25519";
 const archethic = new Archethic(archethicEndpoint);
@@ -187,34 +187,42 @@ async function getBaseTextPlayKB(user, actionCode) {
 
   
   try {
-    const player_info = await archethic.network.callFunction(BATTLECHAIN_ADDRESS, "get_player_info", [user.wallet])
+    const playerInfo = await archethic.network.callFunction(BATTLECHAIN_ADDRESS, "get_player_info", [user.wallet])
 
-    switch(actionCode){
-      case Actions.PLAY:
-  
-      if(player_info.archmon.is_ko){
-        text += archmon_inline_text_ko
-      }else{
-        text += archmon_inline_text_idle
+    if(playerInfo == null){
+
+      text = "Unavailable"
+
+    }else{
+      switch(actionCode){
+        case Actions.PLAY:
+    
+        if(playerInfo.archmon.is_ko){
+          text += archmon_inline_text_ko
+        }else{
+          text += archmon_inline_text_idle
+        }
+          break;
+        case Actions.FEED:
+          text += archmon_inline_text_feed
+          break;
+        case Actions.HEAL:
+          text += archmon_inline_text_heal
+          break;
+        case Actions.SLEEP:
+          text += archmon_inline_text_sleep
+          break;
+        default:
+          text += archmon_inline_text_idle
       }
-        break;
-      case Actions.FEED:
-        text += archmon_inline_text_feed
-        break;
-      case Actions.HEAL:
-        text += archmon_inline_text_heal
-        break;
-      case Actions.SLEEP:
-        text += archmon_inline_text_sleep
-        break;
-      default:
-        text += archmon_inline_text_idle
-    }
+    
   
+      text += `\n⚔️ Power : ${playerInfo.archmon.power}  ❤️ Health : ${playerInfo.archmon.health}\n📖 XP : ${playerInfo.archmon.xp}   🏆 Level : ${playerInfo.archmon.level}`
+      text += `\n🎬 actions : ${playerInfo.action_points}`;
+  
+    }
 
-    text += `\n⚔️ Power : ${player_info.archmon.power}  ❤️ Health : ${player_info.archmon.health}\n📖 XP : ${player_info.archmon.xp}   🏆 Level : ${player_info.archmon.level}`
-    text += `\n🎬 actions : ${player_info.action_points}`;
-
+    
   } catch (error) {
     text = "Unavailable"
     logger.error(error);
@@ -1152,8 +1160,8 @@ bot.action(CALLBACK_DATA_FEED, async ctx => {
   }
 
   const playerInfo = await archethic.network.callFunction(BATTLECHAIN_ADDRESS, "get_player_info", [user.wallet])
-
-  if (playerInfo === undefined){
+  
+  if (playerInfo == null){
 
     return ctx.reply(`🤖: Could not find your battlechain player info 🛑.`)
       .catch(error => logger.error(error));
@@ -1271,7 +1279,7 @@ bot.action(CALLBACK_DATA_HEAL, async ctx => {
 
   const playerInfo = await archethic.network.callFunction(BATTLECHAIN_ADDRESS, "get_player_info", [user.wallet])
 
-  if (playerInfo === undefined){
+  if (playerInfo == null){
 
     return ctx.reply(`🤖: Could not find your battlechain player info 🛑.`)
       .catch(error => logger.error(error));
@@ -1392,7 +1400,7 @@ bot.action(CALLBACK_DATA_REFRESH, async ctx => {
 
   const playerInfo = await archethic.network.callFunction(BATTLECHAIN_ADDRESS, "get_player_info", [user.wallet])
 
-  if (playerInfo === undefined){
+  if (playerInfo == null){
 
     return ctx.reply(`🤖: Could not find your battlechain player info 🛑.`)
       .catch(error => logger.error(error));
@@ -1505,7 +1513,7 @@ bot.action(CALLBACK_DATA_RESURRECT, async ctx => {
 
   const playerInfo = await archethic.network.callFunction(BATTLECHAIN_ADDRESS, "get_player_info", [user.wallet])
 
-  if (playerInfo === undefined){
+  if (playerInfo == null){
 
     return ctx.reply(`🤖: Could not find your battlechain player info 🛑.`)
       .catch(error => logger.error(error));
@@ -1762,7 +1770,7 @@ bot.command("attack", async ctx => {
 
   const playerInfo = await archethic.network.callFunction(BATTLECHAIN_ADDRESS, "get_player_info", [user.wallet])
 
-  if (playerInfo === undefined){
+  if (playerInfo == null){
 
     return ctx.reply(`🤖: Could not find your battlechain player info 🛑.`)
       .catch(error => logger.error(error));
