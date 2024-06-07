@@ -6,6 +6,7 @@ import LocalSession from 'telegraf-session-local'
 import QRCode from "qrcode";
 import * as bip39 from "bip39"
 import fs from "fs"
+import {getRemainingTime, getCurrentTimeFormatted} from "./utils.mjs"
 
 
 
@@ -136,6 +137,16 @@ function generatePemText(seed, publicAddress) {
 
 }
 
+function getTimeText(){
+
+  const remainingTime = getRemainingTime()
+
+  var timeText = `⏳ : Next <b>Day</b> in : ${remainingTime.nextDay}`
+  timeText += `\n⏳ : Next <b>Round</b> in ${remainingTime.nextRound}`
+  timeText += `\n⏳ : Next <b>Turn</b> in ${remainingTime.nextTurn}`
+
+  return timeText
+}
 
 function seedStringToUint8Array(seed) {
 
@@ -183,7 +194,7 @@ async function getBaseTextPlayKB(user, actionCode) {
   var seedUint8Array = seedStringToUint8Array(user.seed)
 
   
-  var text = ""
+  var text = " "
 
   
   try {
@@ -194,6 +205,9 @@ async function getBaseTextPlayKB(user, actionCode) {
       text = "Unavailable"
 
     }else{
+
+      
+
       switch(actionCode){
         case Actions.PLAY:
     
@@ -635,16 +649,18 @@ bot.hears("▶️ Play", async ctx => {
   
   if (textInline == "Unavailable"){
     return  ctx.telegram.sendMessage(ctx.message.chat.id, "Player info not available yet. Try again in a few minutes.")
+    .catch(error => logger.error(error))
   }
 
-  try {
-    return await ctx.telegram.sendMessage(ctx.message.chat.id, textInline,
-      { parse_mode: "HTML", ...Markup.inlineKeyboard(INLINE_KEYBOARD_PLAY) });
-  } catch (error) {
-    logger.error(error);
-    return await ctx.telegram.sendMessage(ctx.message.chat.id, "Play keyboard not accessible.");
+  
+  
+  const text = getTimeText() + "\n" + textInline
 
-  }
+  return  ctx.telegram.sendMessage(ctx.message.chat.id, text,
+    { parse_mode: "HTML", ...Markup.inlineKeyboard(INLINE_KEYBOARD_PLAY) })
+    .catch(error => logger.error(error))
+
+  
 })
 
 const RULES_TEXT = `
@@ -1170,7 +1186,8 @@ bot.action(CALLBACK_DATA_FEED, async ctx => {
 
   if (playerInfo.action_points == 0) {
     const baseTextReply = await getBaseTextPlayKB(user)
-    let textUpdate = baseTextReply + `\n🤖: You don't have any action points left.\n🤖: Try to make him <b>Sleep</b>\n🤖: or wait for tomorrow.⌛`
+    let textUpdate = getTimeText() + "\n" + baseTextReply + `\n🤖: You don't have any action points left.\n🤖: Try to make him <b>Sleep</b>\n🤖: or wait for tomorrow.⌛`
+      + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
 
 
     return ctx.editMessageText(textUpdate, { reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML" })
@@ -1183,8 +1200,8 @@ bot.action(CALLBACK_DATA_FEED, async ctx => {
 
   if (playerInfo.consumed_turn >= turn ) {
     const baseTextReply = await getBaseTextPlayKB(user)
-    let textUpdate = baseTextReply + `\n🤖: You already play an action this turn.⌛`
-
+    let textUpdate = getTimeText() + "\n" + baseTextReply + `\n🤖: You already play an action this turn.⌛`
+    + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
 
     return ctx.editMessageText(textUpdate, { reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML" })
       .catch(error => logger.error(error))
@@ -1195,8 +1212,8 @@ bot.action(CALLBACK_DATA_FEED, async ctx => {
 
   if(playerInfo.archmon.is_ko){
     const baseTextReply = await getBaseTextPlayKB(user,Actions.PLAY)
-      let textUpdate = baseTextReply + `\n🤖: Your archmon is KO ! 💫 \n🤖: Try to <b>Resurrect</b> him first\n🤖: or wait for next round. ⌛`
-
+      let textUpdate = getTimeText() + "\n" + baseTextReply + `\n🤖: Your archmon is KO ! 💫 \n🤖: Try to <b>Resurrect</b> him first\n🤖: or wait for next round. ⌛`
+      + `\n🤖: Last message updated at ${(getCurrentTimeFormatted())}`
 
       return ctx.editMessageText(textUpdate, { reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML" })
         .catch(error => logger.error(error))
@@ -1221,8 +1238,8 @@ bot.action(CALLBACK_DATA_FEED, async ctx => {
         isConfirmed = true
 
         const baseTextReply = await getBaseTextPlayKB(user,Actions.FEED)
-        let textUpdate = baseTextReply + `\n😽: That was a tasty treat! \n🤖: Your archmon will gain 20 XP.`
-
+        let textUpdate = getTimeText() + "\n" + baseTextReply + `\n😽: That was a tasty treat! \n🤖: Your archmon will gain 20 XP.`
+        + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
 
         return await ctx.editMessageText(textUpdate, { reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML" })
           .catch(error => logger.error(error))
@@ -1289,8 +1306,8 @@ bot.action(CALLBACK_DATA_HEAL, async ctx => {
   if (playerInfo.action_points == 0) {
 
     const baseTextReply = await getBaseTextPlayKB(user)
-    let textUpdate = baseTextReply + `\n🤖: You don't have any action points left. \n🤖: Try to make him <b>Sleep</b>\n🤖: or wait for tomorrow.⌛`
-
+    let textUpdate = getTimeText() + "\n" + baseTextReply + `\n🤖: You don't have any action points left. \n🤖: Try to make him <b>Sleep</b>\n🤖: or wait for tomorrow.⌛`
+    + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
 
     return ctx.editMessageText(textUpdate, { reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML" })
       .catch(error => logger.error(error))
@@ -1301,8 +1318,8 @@ bot.action(CALLBACK_DATA_HEAL, async ctx => {
 
   if (playerInfo.consumed_turn >= turn ) {
     const baseTextReply = await getBaseTextPlayKB(user)
-    let textUpdate = baseTextReply + `\n🤖: You already play an action this turn.⌛`
-
+    let textUpdate = getTimeText() + "\n" + baseTextReply + `\n🤖: You already play an action this turn.⌛`
+    + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
 
     return ctx.editMessageText(textUpdate, { reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML" })
       .catch(error => logger.error(error))
@@ -1313,8 +1330,8 @@ bot.action(CALLBACK_DATA_HEAL, async ctx => {
   if(playerInfo.archmon.is_ko){
 
     const baseTextReply = await getBaseTextPlayKB(user)
-      let textUpdate = baseTextReply + `\n🤖: Your archmon is KO ! 💫 \n🤖: Try to <b>Resurrect</b> him first\n🤖: or wait for next round. ⌛`
-
+      let textUpdate = getTimeText() + "\n" + baseTextReply + `\n🤖: Your archmon is KO ! 💫 \n🤖: Try to <b>Resurrect</b> him first\n🤖: or wait for next round. ⌛`
+      + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
 
       return ctx.editMessageText(textUpdate, { reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML" })
         .catch(error => logger.error(error))
@@ -1325,8 +1342,8 @@ bot.action(CALLBACK_DATA_HEAL, async ctx => {
   if(playerInfo.archmon.health >= playerInfo.archmon.base_health){
    
       const baseTextReply = await getBaseTextPlayKB(user)
-      let textUpdate = baseTextReply + `\n🤖:Your archmon is already full life ! ❤️`
-
+      let textUpdate = getTimeText() + "\n" + baseTextReply + `\n🤖:Your archmon is already full life ! ❤️`
+      + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
 
       return ctx.editMessageText(textUpdate, { reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML" })
         .catch(error => logger.error(error))
@@ -1350,8 +1367,8 @@ bot.action(CALLBACK_DATA_HEAL, async ctx => {
         isConfirmed = true
 
         const baseTextReply = await getBaseTextPlayKB(user,Actions.HEAL)
-        let textUpdate = baseTextReply + `\n😸: I'm already feeling better.`
-
+        let textUpdate = getTimeText() + "\n" + baseTextReply + `\n😸: I'm already feeling better.`
+        + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
 
         return await ctx.editMessageText(textUpdate, { reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML" })
           .catch(error => logger.error(error))
@@ -1412,8 +1429,8 @@ bot.action(CALLBACK_DATA_REFRESH, async ctx => {
   if(playerInfo.consumed_day >= day){
 
     const baseTextReply = await getBaseTextPlayKB(user,Actions.PLAY)
-      let textUpdate = baseTextReply + `\n🤖: Your archmon already slept today,\n🤖: wait for tomorrow. ⌛`
-
+      let textUpdate = getTimeText() + "\n" + baseTextReply + `\n🤖: Your archmon already slept today,\n🤖: wait for tomorrow. ⌛`
+      + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
 
       return ctx.editMessageText(textUpdate, { reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML" })
         .catch(error => logger.error(error))
@@ -1425,8 +1442,8 @@ bot.action(CALLBACK_DATA_REFRESH, async ctx => {
   if(playerInfo.archmon.is_ko){
 
     const baseTextReply = await getBaseTextPlayKB(user,Actions.PLAY)
-      let textUpdate = baseTextReply + `\n🤖: Your archmon is KO ! 💫\n🤖: Try to <b>Resurrect</b> him first\n🤖: or wait for next round. ⌛`
-
+      let textUpdate = getTimeText() + "\n" + baseTextReply + `\n🤖: Your archmon is KO ! 💫\n🤖: Try to <b>Resurrect</b> him first\n🤖: or wait for next round. ⌛`
+      + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
 
       return ctx.editMessageText(textUpdate, { reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML" })
         .catch(error => logger.error(error))
@@ -1438,8 +1455,8 @@ bot.action(CALLBACK_DATA_REFRESH, async ctx => {
   if(playerInfo.action_points != 0){
    
       const baseTextReply = await getBaseTextPlayKB(user)
-      let textUpdate = baseTextReply + `\n🐱:I'm not exhausted yet.`
-
+      let textUpdate = getTimeText() + "\n" + baseTextReply + `\n🐱:I'm not exhausted yet.`
+      + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
 
       return ctx.editMessageText(textUpdate, { reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML" })
         .catch(error => logger.error(error))
@@ -1463,8 +1480,8 @@ bot.action(CALLBACK_DATA_REFRESH, async ctx => {
         isConfirmed = true
 
         const baseTextReply = await getBaseTextPlayKB(user,Actions.SLEEP)
-        let textUpdate = baseTextReply + `\n😸: I'm going to bed now.`
-
+        let textUpdate = getTimeText() + "\n" + baseTextReply + `\n😸: I'm going to bed now.`
+        + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
 
         ctx.editMessageText(textUpdate, { reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML" })
           .catch(error => logger.error(error))
@@ -1527,8 +1544,8 @@ bot.action(CALLBACK_DATA_RESURRECT, async ctx => {
   if(!playerInfo.archmon.is_ko){
 
     const baseTextReply = await getBaseTextPlayKB(user)
-      let textUpdate = baseTextReply + `\n🙀: Hey, i'm fine!`
-
+      let textUpdate = getTimeText() + "\n" + baseTextReply + `\n🙀: Hey, i'm fine!`
+      + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
 
       return ctx.editMessageText(textUpdate, { reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML" })
         .catch(error => logger.error(error))
@@ -1541,8 +1558,8 @@ bot.action(CALLBACK_DATA_RESURRECT, async ctx => {
   if(playerInfo.consumed_round >= round){
 
     const baseTextReply = await getBaseTextPlayKB(user,Actions.PLAY)
-      let textUpdate = baseTextReply + `\n🤖: You already resurrected your archmon this round,\n🤖: wait for next round. ⌛`
-
+      let textUpdate = getTimeText() + "\n" + baseTextReply + `\n🤖: You already resurrected your archmon this round,\n🤖: wait for next round. ⌛`
+      + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
 
       return ctx.editMessageText(textUpdate, { reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML" })
         .catch(error => logger.error(error))
@@ -1570,8 +1587,8 @@ bot.action(CALLBACK_DATA_RESURRECT, async ctx => {
         isConfirmed = true
 
         const baseTextReply = await getBaseTextPlayKB(user)
-        let textUpdate = baseTextReply + `\n🤖: Your archmon is rising ! 💞`
-
+        let textUpdate = getTimeText() + "\n" + baseTextReply + `\n🤖: Your archmon is rising ! 💞`
+        + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
 
         await ctx.editMessageText(textUpdate, { reply_markup: ctx.callbackQuery.message.reply_markup, parse_mode: "HTML" })
           .catch(error => logger.error(error))
