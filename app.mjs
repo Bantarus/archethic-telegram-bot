@@ -37,7 +37,7 @@ const archethicEndpoint = "https://testnet.archethic.net";
 
 const originPrivateKey = Utils.originPrivateKey
 
-const BATTLECHAIN_ADDRESS = "0000ba6ae944d618d1fe58ecac00f8bad8139b1bc53c33c2989900f619911ccb9547"
+const BATTLECHAIN_ADDRESS = "000082011c349f71951327487a2411449b81ec681fd9a4c873a75db4c92ca8fc071f"
 
 const curveType = "ed25519";
 const archethic = new Archethic(archethicEndpoint);
@@ -1826,19 +1826,19 @@ bot.command("attack", async ctx => {
   const recipientUser = UsersDao.getByName(username)
 
   if (recipientUser == undefined) {
-    return ctx.reply(`🤖: Unregistred life form : ${ctx.message.from.first_name} 🛑.`, {
+    return ctx.reply(`🤖: Unregistred life form : @${username} 🛑.`, {
       reply_to_message_id: ctx.message.message_id
     })
       .catch(error => logger.error(error));
   }
 
-  if (recipientUser.id == user.id) {
+   if (recipientUser.id == user.id) {
     return ctx.reply(`🙀: I will not hit myself ! Are you Crazy !?`, {
       reply_to_message_id: ctx.message.message_id
     })
       .catch(error => logger.error(error));
   }
-
+ 
 
 
 
@@ -1862,7 +1862,7 @@ bot.command("attack", async ctx => {
 
 const recipientPlayerInfo = await archethic.network.callFunction(BATTLECHAIN_ADDRESS, "get_player_info", [recipientUser.wallet])
 
-  if (recipientPlayerInfo === undefined){
+  if (recipientPlayerInfo == null){
 
     return ctx.reply(`🤖: Could not find @${username} battlechain player info. Adding this player may not be resolved yet.🛑`)
       .catch(error => logger.error(error));

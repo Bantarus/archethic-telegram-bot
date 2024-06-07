@@ -1,4 +1,5 @@
 **/node_modules/*
+**/database
 .vscode/launch.json
 db.json
 battlechain.json

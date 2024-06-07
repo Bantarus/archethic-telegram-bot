@@ -88,16 +88,18 @@ condition triggered_by: transaction, on: attack(player_address), as: [
 
             player_attacker = get_player(player_attacker_genesis_address)
             player_defender = get_player(player_defender_genesis_address)
+
             if player_attacker_genesis_address != player_defender_genesis_address  do
             
-              players_are_known = player_attacker != nil && player_defender != nil
-              archmons_ko = !player_attacker.archmon.is_ko && !player_defender.archmon.is_ko
+              players_are_known? = player_attacker != nil && player_defender != nil
+              archmons_ko? = !player_attacker.archmon.is_ko && !player_defender.archmon.is_ko
 
-              players_are_known && archmons_ko && player_attacker.action_points > 0 && player.consumed_turn < State.get("turn",1)
+              players_are_known? && archmons_ko? && player_attacker.action_points > 0 && player_attacker.consumed_turn < State.get("turn",1)
            
             else 
 
-              false 
+              #false 
+              true
 
             end
 
