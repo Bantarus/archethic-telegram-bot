@@ -37,7 +37,7 @@ const archethicEndpoint = "https://testnet.archethic.net";
 
 const originPrivateKey = Utils.originPrivateKey
 
-const BATTLECHAIN_ADDRESS = "000082011c349f71951327487a2411449b81ec681fd9a4c873a75db4c92ca8fc071f"
+const BATTLECHAIN_ADDRESS = "0000ae511a909678cd89bbc4885ea7592d29c1e84cb9974315a08658d7ec70fdefa1"
 
 const curveType = "ed25519";
 const archethic = new Archethic(archethicEndpoint);
@@ -499,6 +499,106 @@ bot.hears(KEYBOARD_BATTLECHAIN_BUTTON_TEXT, async ctx => {
 
 
   }
+
+
+
+})
+
+bot.hears(GENERATE_WALLET_BUTTON_TEXT, ctx => {
+
+  var userId = ctx.message.from.id
+  var chatId = ctx.message.chat.id;
+  var seed = Crypto.randomSecretKey();
+  var index = 0;
+
+  var publicAddress = Crypto.deriveAddress(seed, index)
+
+
+
+  var user = UsersDao.getById(userId);
+  if (user === undefined) {
+
+    return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: Unknown life form : ${ctx.message.from.first_name}. 🛑`)
+      .catch(error => logger.error(error));
+  }
+
+  user.wallet = Utils.uint8ArrayToHex(publicAddress);
+  user.seed = seed.toString()
+  db.write()
+
+  //var pemTextBuffer = generatePemText(seed,publicAddress);
+  //ctx.replyWithDocument({source: pemTextBuffer , filename: publicAddress + ".pem" })
+  //.catch(error => logger.error(error))
+
+  // var walletTextToDraw = user.wallet.substring(0,4) + "..." + user.wallet.substring(user.wallet.length-4,user.wallet.length)
+
+
+  var keyboardObject = [
+    // ["👛 Wallet : " + walletTextToDraw],
+    ["🔓 Open"],
+    ["🏠 Back"]
+  ]
+
+  ctx.telegram.sendMessage(ctx.message.chat.id, "Wallet generated :")
+    .catch(error => logger.error(error))
+
+  ctx.telegram.sendMessage(ctx.message.chat.id, user.wallet,
+    Markup.keyboard(keyboardObject))
+    .catch(error => logger.error(error))
+})
+
+
+
+bot.hears(/mode (\w+)/, async ctx => {
+
+  var userId = ctx.message.from.id
+  var user = UsersDao.getById(userId)
+
+  const modeName = ctx.match[1]
+
+  
+
+    const index = await archethic.transaction.getTransactionIndex(user.wallet)
+    const seedUint8Array = seedStringToUint8Array(user.seed)
+    var isConfirmed = false
+    const tx = archethic.transaction.new()
+      .setType("transfer")
+      .addRecipient(BATTLECHAIN_ADDRESS, "change_mode", [modeName])
+      .build(seedUint8Array, index)
+      .originSign(originPrivateKey)
+      .on("confirmation", (nbConf, maxConf) => {
+        console.log(nbConf, maxConf)
+        if (nbConf == maxConf && !isConfirmed) {
+          isConfirmed = true
+
+          user.battlechain = true;
+          db.write()
+
+          ctx.reply(`Mode changed to: ${modeName}`)
+            .catch(error => logger.error(error))
+
+        }
+
+      })
+      .on("error", (context, reason) => {
+        console.log("Context:", context)
+        console.log("Reason:", reason)
+        return ctx.telegram.sendMessage(ctx.message.chat.id, `🤖: INVALID_TRANSACTION : ${reason}. 🔗`)
+          .catch(error => logger.error(error))
+      })
+    console.log(tx.toJSON())
+
+    try {
+
+
+      tx.send()
+
+
+
+
+    } catch (error) {
+      logger.error(error)
+    }
 
 
 

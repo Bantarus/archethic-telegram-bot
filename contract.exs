@@ -17,6 +17,7 @@ end
 
 # end turn every 30 minutes 
 # player can do only one action per turn
+# except when in fury mode, the limitation is removed
 actions triggered_by: interval, at: "*/30 * * * *" do
   
   current_turn = State.get("turn",1)
@@ -32,6 +33,22 @@ actions triggered_by: interval, at: "0 */12 * * *" do
   current_round = State.get("round",1)
   State.set("round", current_round + 1)
 
+end
+
+condition triggered_by: transaction, on: change_mode(mode), as: [
+
+  content: (
+    previous_address = Chain.get_previous_address(transaction)
+    genesis_address = Chain.get_genesis_address(previous_address)
+    genesis_address == String.to_hex("00007ff81d78413058b8c9e2799e59f2be28e3f454767d3dbe479403b40c4dff5fe9")
+  )
+
+]
+
+actions triggered_by: transaction, on: change_mode(mode) do
+
+State.set("mode",mode)
+  
 end
 
 
@@ -94,12 +111,12 @@ condition triggered_by: transaction, on: attack(player_address), as: [
               players_are_known? = player_attacker != nil && player_defender != nil
               archmons_ko? = !player_attacker.archmon.is_ko && !player_defender.archmon.is_ko
 
-              players_are_known? && archmons_ko? && player_attacker.action_points > 0 && player_attacker.consumed_turn < State.get("turn",1)
+              players_are_known? && archmons_ko? && player_attacker.action_points > 0 && (player_attacker.consumed_turn < State.get("turn",1) || State.get("mode","classique") == "fury")
            
             else 
 
-              #false 
-              true
+              false 
+              
 
             end
 
@@ -171,7 +188,7 @@ condition triggered_by: transaction, on: feed(), as: [
    player_previous_address = Chain.get_previous_address(transaction)
   player_genesis_address = Chain.get_genesis_address(player_previous_address)
   player = get_player(player_genesis_address)
-  player != nil && !player.archmon.is_ko && player.action_points > 0 && player.consumed_turn < State.get("turn",1)
+  player != nil && !player.archmon.is_ko && player.action_points > 0 && (player.consumed_turn < State.get("turn",1) || State.get("mode","classique") == "fury")
 
   )
 
@@ -232,7 +249,7 @@ condition triggered_by: transaction, on: heal(), as: [
       player = get_player(player_genesis_address)
       if player != nil  && player.action_points > 0 do
 
-        player.consumed_turn < State.get("turn",1) && !player.archmon.is_ko  && player.archmon.health < player.archmon.base_health  
+        (player.consumed_turn < State.get("turn",1) || State.get("mode","classique") == "fury") && !player.archmon.is_ko  && player.archmon.health < player.archmon.base_health  
        
   
       else 
