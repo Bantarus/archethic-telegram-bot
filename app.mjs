@@ -37,7 +37,7 @@ const archethicEndpoint = "https://testnet.archethic.net";
 
 const originPrivateKey = Utils.originPrivateKey
 
-const BATTLECHAIN_ADDRESS = "0000ae511a909678cd89bbc4885ea7592d29c1e84cb9974315a08658d7ec70fdefa1"
+const BATTLECHAIN_ADDRESS = "0000193bf60609d0ac7974e4f57cee4ca4caddc3488036292d9d179e7e44bd1582db"
 
 const curveType = "ed25519";
 const archethic = new Archethic(archethicEndpoint);
@@ -1298,7 +1298,7 @@ bot.action(CALLBACK_DATA_FEED, async ctx => {
 
   const turn = await archethic.network.callFunction(BATTLECHAIN_ADDRESS,"get_turn",[])
 
-  if (playerInfo.consumed_turn >= turn ) {
+  if ( playerInfo.battlechain_mode == "classique" && playerInfo.consumed_turn  >= turn ) {
     const baseTextReply = await getBaseTextPlayKB(user)
     let textUpdate = getTimeText() + "\n" + baseTextReply + `\n🤖: You already play an action this turn.⌛`
     + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
@@ -1416,7 +1416,7 @@ bot.action(CALLBACK_DATA_HEAL, async ctx => {
 
   const turn = await archethic.network.callFunction(BATTLECHAIN_ADDRESS,"get_turn",[])
 
-  if (playerInfo.consumed_turn >= turn ) {
+  if (playerInfo.battlechain_mode == "classique" && playerInfo.consumed_turn >= turn ) {
     const baseTextReply = await getBaseTextPlayKB(user)
     let textUpdate = getTimeText() + "\n" + baseTextReply + `\n🤖: You already play an action this turn.⌛`
     + `\n🤖: Last message updated at ${getCurrentTimeFormatted()}`
@@ -1914,7 +1914,7 @@ bot.command("attack", async ctx => {
 
   const turn = await archethic.network.callFunction(BATTLECHAIN_ADDRESS,"get_turn",[])
 
-  if (playerInfo.consumed_turn >= turn ) {
+  if (playerInfo.battlechain_mode == "classique" && playerInfo.consumed_turn >= turn ) {
     return ctx.reply(`\n🤖: You already play an action this turn.⌛`, {
       reply_to_message_id: ctx.message.message_id
     })

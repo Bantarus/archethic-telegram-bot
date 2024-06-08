@@ -428,7 +428,14 @@ export fun get_player_info(player_genesis_address) do
   players = State.get("players", Map.new())
 
 
-  Map.get(players, player_genesis_address, nil)
+  player = Map.get(players, player_genesis_address, nil)
+
+  if player != nil do
+  player = Map.set(player,"battlechain_mode",State.get("mode","classique"))
+
+  end 
+
+  player
 
 
 end
@@ -491,5 +498,10 @@ end
 
 export fun get_day() do
 State.get("day",1)
+
+end
+
+export fun get_mode() do
+State.get("mode","classique")
 
 end
